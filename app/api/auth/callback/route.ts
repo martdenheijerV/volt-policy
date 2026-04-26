@@ -22,8 +22,26 @@ export async function GET(request: Request) {
   try {
     claims = await exchangeCode(url, state, codeVerifier, nonce);
   } catch (e) {
+    // Surface the FULL error so we can diagnose token-exchange failures.
+    console.error("=== /api/auth/callback exchange error ===");
+    console.error("name:", e instanceof Error ? e.name : typeof e);
+    console.error("message:", e instanceof Error ? e.message : String(e));
+    console.error("stack:", e instanceof Error ? e.stack : "(no stack)");
+    if (e && typeof e === "object") {
+      for (const key of Object.keys(e as Record<string, unknown>)) {
+        try {
+          console.error(`prop ${key}:`, JSON.stringify((e as Record<string, unknown>)[key]));
+        } catch {
+          console.error(`prop ${key}: (unserialisable)`);
+        }
+      }
+    }
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "OIDC exchange failed" },
+      {
+        error: e instanceof Error ? e.message : "OIDC exchange failed",
+        name: e instanceof Error ? e.name : undefined,
+        cause: e instanceof Error && e.cause ? String(e.cause) : undefined,
+      },
       { status: 400 }
     );
   }
