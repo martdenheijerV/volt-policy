@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New comment</title>
+</head>
+<body style="font-family: Ubuntu, system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; color: #1a1a1a;">
+  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 24px;">
+    <div style="width: 32px; height: 32px; background: #6629a9; border-radius: 4px;"></div>
+    <h1 style="font-size: 18px; margin: 0;">Volt Policy</h1>
+  </div>
+
+  <p><strong>{{ params.commenter }}</strong> commented on
+  <a href="{{ params.docUrl }}" style="color: #6629a9;">{{ params.docTitle }}</a>:</p>
+
+  <blockquote style="border-left: 4px solid #6629a9; padding-left: 16px; margin: 24px 0; color: #333;">
+    {{ params.commentBody }}
+  </blockquote>
+
+  {% if params.anchorQuote %}
+  <p style="color: #666; font-size: 14px;">Anchored to: <em>"{{ params.anchorQuote }}"</em></p>
+  {% endif %}
+
+  <p style="margin: 32px 0;">
+    <a href="{{ params.docUrl }}" style="background: #6629a9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+      Open document
+    </a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
+  <p style="color: #888; font-size: 12px;">You're receiving this because you contributed to this document. <a href="{{ params.unsubscribeUrl }}" style="color: #888;">Unsubscribe</a></p>
+</body>
+</html>

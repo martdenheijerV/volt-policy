@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Confirm your account</title>
+</head>
+<body style="font-family: Ubuntu, system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; color: #1a1a1a;">
+  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 24px;">
+    <div style="width: 32px; height: 32px; background: #6629a9; border-radius: 4px;"></div>
+    <h1 style="font-size: 18px; margin: 0;">Volt Policy</h1>
+  </div>
+
+  <h2 style="font-size: 24px; margin-bottom: 16px;">Welcome to Volt Policy</h2>
+  <p>Hi {{ params.fullName | default: "there" }},</p>
+  <p>Thanks for joining Volt Policy — the single source of truth for Volt's
+  political documents. Click the button below to confirm your email
+  address.</p>
+
+  <p style="margin: 32px 0;">
+    <a href="{{ .ConfirmationURL }}" style="background: #6629a9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+      Confirm my account
+    </a>
+  </p>
+
+  <p style="color: #666; font-size: 14px;">If the button doesn't work, copy this link:<br>
+  <a href="{{ .ConfirmationURL }}" style="color: #6629a9; word-break: break-all;">{{ .ConfirmationURL }}</a></p>
+
+  <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;">
+  <p style="color: #888; font-size: 12px;">If you didn't sign up, you can safely ignore this email.</p>
+</body>
+</html>

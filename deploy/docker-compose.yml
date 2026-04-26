@@ -1,0 +1,76 @@
+# Volt Policy Management — full self-hosted stack on Hetzner
+# Place alongside Supabase's official self-hosted compose (see DEPLOY.md).
+#
+# Networks:
+#   - `volt`: internal between this stack's services
+#   - `supabase_default`: Supabase's compose network (joined as external)
+#
+# Reverse proxy: Caddy auto-issues Let's Encrypt certs for the listed
+# subdomains. Point your DNS A-records at the VPS IP first.
+
+version: "3.9"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - volt
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: volt-policy:latest
+    restart: unless-stopped
+    env_file: ../.env.production
+    expose:
+      - "3000"
+    depends_on:
+      - languagetool
+      - hocuspocus
+    networks:
+      - volt
+      - supabase_default
+
+  languagetool:
+    image: erikvl87/languagetool:latest
+    restart: unless-stopped
+    environment:
+      Java_Xms: 512m
+      Java_Xmx: 1g
+    expose:
+      - "8010"
+    networks:
+      - volt
+
+  hocuspocus:
+    build:
+      context: ./hocuspocus
+      dockerfile: Dockerfile
+    image: volt-hocuspocus:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      HOCUS_SECRET: ${HOCUS_SECRET}
+    expose:
+      - "1234"
+    networks:
+      - volt
+      - supabase_default
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  volt:
+  supabase_default:
+    external: true

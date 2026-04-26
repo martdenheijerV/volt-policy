@@ -1,0 +1,73 @@
+import Link from "next/link";
+import { createClient } from "@/lib/db/client";
+
+const SECTIONS = [
+  { slug: "", label: "Overview" },
+  { slug: "create-document", label: "Create a document" },
+  { slug: "review-and-approve", label: "Review & approve" },
+  { slug: "comments", label: "Anchored comments" },
+  { slug: "amendments", label: "Amendments" },
+  { slug: "translations", label: "Translations" },
+  { slug: "export", label: "Export & print" },
+  { slug: "roles", label: "Roles & permissions" },
+];
+
+export default async function HelpLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded bg-volt-600" aria-hidden />
+            <span className="font-semibold">Volt Policy — Help</span>
+          </Link>
+          <nav className="flex items-center gap-4 text-sm">
+            <Link href="/library" className="hover:underline">Library</Link>
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="rounded bg-volt-600 px-3 py-1.5 text-white hover:bg-volt-700"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded bg-volt-600 px-3 py-1.5 text-white hover:bg-volt-700"
+              >
+                Sign in
+              </Link>
+            )}
+          </nav>
+        </div>
+      </header>
+      <div className="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[220px_1fr]">
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Help center
+          </h2>
+          <nav className="mt-3 flex flex-col gap-1 text-sm">
+            {SECTIONS.map((s) => (
+              <Link
+                key={s.slug}
+                href={s.slug ? `/help/${s.slug}` : "/help"}
+                className="rounded px-3 py-1.5 hover:bg-slate-100"
+              >
+                {s.label}
+              </Link>
+            ))}
+          </nav>
+        </aside>
+        <article className="prose-doc max-w-3xl">{children}</article>
+      </div>
+    </div>
+  );
+}
