@@ -6,10 +6,15 @@ let _config: openid.Configuration | null = null;
 export async function getOpenIdConfig(): Promise<openid.Configuration> {
   if (_config) return _config;
   const cfg = getOidcConfig();
+  // Force HTTP Basic for the token endpoint. Authentik accepts both
+  // client_secret_basic and client_secret_post per its discovery doc, but
+  // openid-client v6 defaults to ClientSecretPost which Authentik rejects
+  // with "invalid_client" for some provider configurations.
   _config = await openid.discovery(
     new URL(cfg.issuerUrl),
     cfg.clientId,
-    cfg.clientSecret
+    cfg.clientSecret,
+    openid.ClientSecretBasic(cfg.clientSecret)
   );
   return _config;
 }
