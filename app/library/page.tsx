@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/db/client";
 import { formatDate } from "@/lib/utils";
+import { T } from "@/components/T";
+import { getTr } from "@/lib/i18n/server";
 import type { Document } from "@/lib/types";
 
 export default async function LibraryPage({
@@ -8,6 +10,7 @@ export default async function LibraryPage({
 }: {
   searchParams: Promise<{ q?: string; type?: string; lang?: string }>;
 }) {
+  const { tr } = await getTr();
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -25,61 +28,95 @@ export default async function LibraryPage({
   const { data } = await query;
   const docs = (data as Document[] | null) ?? [];
 
+  const [
+    searchPlaceholder,
+    searchAria,
+    typeAria,
+    langAria,
+    typeAll,
+    langAll,
+    typePolicy,
+    typePosition,
+    typeResolution,
+    typeStatement,
+    typeMotion,
+    typeOther,
+    searchBtn,
+    approvedLabel,
+  ] = await Promise.all([
+    tr("Search approved documents…"),
+    tr("Search"),
+    tr("Type"),
+    tr("Language"),
+    tr("All types"),
+    tr("All languages"),
+    tr("Policy"),
+    tr("Position"),
+    tr("Resolution"),
+    tr("Statement"),
+    tr("Motion"),
+    tr("Other"),
+    tr("Search"),
+    tr("Approved"),
+  ]);
+
   return (
     <div>
-      <h1 className="text-3xl font-bold">Public policy library</h1>
+      <h1 className="text-3xl font-bold">
+        <T>Public policy library</T>
+      </h1>
       <p className="mt-1 text-sm text-slate-600">
-        Approved Volt political documents — no login required.
+        <T>Approved Volt political documents — no login required.</T>
       </p>
 
       <form className="mt-6 flex flex-wrap gap-3" action="/library">
         <input
           name="q"
           defaultValue={params.q ?? ""}
-          placeholder="Search approved documents…"
+          placeholder={searchPlaceholder}
           className="min-w-[240px] flex-1 rounded border border-slate-300 px-3 py-2"
-          aria-label="Search"
+          aria-label={searchAria}
         />
         <select
           name="type"
           defaultValue={params.type ?? ""}
           className="rounded border border-slate-300 px-3 py-2"
-          aria-label="Type"
+          aria-label={typeAria}
         >
-          <option value="">All types</option>
-          <option value="policy">Policy</option>
-          <option value="position">Position</option>
-          <option value="resolution">Resolution</option>
-          <option value="statement">Statement</option>
-          <option value="motion">Motion</option>
-          <option value="other">Other</option>
+          <option value="">{typeAll}</option>
+          <option value="policy">{typePolicy}</option>
+          <option value="position">{typePosition}</option>
+          <option value="resolution">{typeResolution}</option>
+          <option value="statement">{typeStatement}</option>
+          <option value="motion">{typeMotion}</option>
+          <option value="other">{typeOther}</option>
         </select>
         <select
           name="lang"
           defaultValue={params.lang ?? ""}
           className="rounded border border-slate-300 px-3 py-2"
-          aria-label="Language"
+          aria-label={langAria}
         >
-          <option value="">All languages</option>
+          <option value="">{langAll}</option>
           <option value="en">English</option>
-          <option value="de">German</option>
-          <option value="fr">French</option>
-          <option value="nl">Dutch</option>
-          <option value="it">Italian</option>
-          <option value="es">Spanish</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="nl">Nederlands</option>
+          <option value="it">Italiano</option>
+          <option value="es">Español</option>
         </select>
         <button
           type="submit"
           className="rounded bg-slate-900 px-4 py-2 text-white"
         >
-          Search
+          {searchBtn}
         </button>
       </form>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {docs.length === 0 && (
           <div className="sm:col-span-2 rounded-lg border bg-white p-8 text-center text-sm text-slate-500">
-            No approved documents match your search yet.
+            <T>No approved documents match your search yet.</T>
           </div>
         )}
         {docs.map((d) => (
@@ -101,18 +138,18 @@ export default async function LibraryPage({
             )}
             {d.tags?.length ? (
               <div className="mt-3 flex flex-wrap gap-1">
-                {d.tags.map((t) => (
+                {d.tags.map((tg) => (
                   <span
-                    key={t}
+                    key={tg}
                     className="rounded bg-volt-50 px-2 py-0.5 text-xs text-volt-700"
                   >
-                    {t}
+                    {tg}
                   </span>
                 ))}
               </div>
             ) : null}
             <div className="mt-3 text-xs text-slate-500">
-              Approved {d.approved_at ? formatDate(d.approved_at) : "—"}
+              {approvedLabel} {d.approved_at ? formatDate(d.approved_at) : "—"}
             </div>
           </Link>
         ))}

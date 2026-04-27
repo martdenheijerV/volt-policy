@@ -4,6 +4,8 @@ import { createClient } from "@/lib/db/client";
 import DocumentWorkspace from "@/components/DocumentWorkspace";
 import MetadataPanel from "@/components/MetadataPanel";
 import PendingReviewBanner from "@/components/PendingReviewBanner";
+import { T } from "@/components/T";
+import { getT } from "@/lib/i18n/server";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
 import type { Comment, Document, Profile } from "@/lib/types";
@@ -14,6 +16,7 @@ export default async function DocumentPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { t } = await getT();
   const supabase = await createClient();
 
   const {
@@ -129,7 +132,7 @@ export default async function DocumentPage({
           href="/documents"
           className="text-sm text-slate-500 hover:underline"
         >
-          ← All documents
+          ← <T>All documents</T>
         </Link>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span
@@ -137,25 +140,33 @@ export default async function DocumentPage({
               doc.status
             )}`}
           >
-            {doc.status}
+            {t(
+              doc.status === "draft"
+                ? "doc.statusDraft"
+                : doc.status === "review"
+                ? "doc.statusReview"
+                : doc.status === "approved"
+                ? "doc.statusApproved"
+                : "doc.statusArchived"
+            )}
           </span>
           <Link
             href={`/documents/${doc.id}/history`}
             className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
           >
-            History
+            {t("doc.history")}
           </Link>
           <Link
             href={`/documents/${doc.id}/amendments`}
             className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
           >
-            Amendments
+            {t("doc.amendments")}
           </Link>
           <Link
             href={`/documents/${doc.id}/citations`}
             className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
           >
-            Citations
+            {t("doc.citations")}
           </Link>
           {discussion?.url ? (
             <a
@@ -164,14 +175,14 @@ export default async function DocumentPage({
               rel="noopener noreferrer"
               className="rounded border border-volt-600 px-3 py-1 font-medium text-volt-700 hover:bg-volt-50"
             >
-              💬 Open discussion
+              💬 {t("doc.discussion")}
             </a>
           ) : canEdit ? (
             <Link
               href={`/documents/${doc.id}/discussion`}
               className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
             >
-              + Discussion link
+              + <T>Discussion link</T>
             </Link>
           ) : null}
           <a

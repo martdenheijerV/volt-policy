@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/db/client";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
+import { T } from "@/components/T";
+import { getT, getTr } from "@/lib/i18n/server";
 import type { Document, DocStatus } from "@/lib/types";
 
 export default async function DocumentsPage({
@@ -8,6 +10,8 @@ export default async function DocumentsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: DocStatus; type?: string }>;
 }) {
+  const { t } = await getT();
+  const { tr } = await getTr();
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -22,13 +26,45 @@ export default async function DocumentsPage({
 
   const { data, error } = await query;
 
+  const statusKey: Record<string, string> = {
+    draft: "doc.statusDraft",
+    review: "doc.statusReview",
+    approved: "doc.statusApproved",
+    archived: "doc.statusArchived",
+  };
+
+  // Pre-translate strings used inside attributes (placeholder, aria-label).
+  const [
+    searchPlaceholder,
+    searchAria,
+    statusAllLabel,
+    typeAllLabel,
+    typePolicy,
+    typePosition,
+    typeResolution,
+    typeStatement,
+    typeMotion,
+    typeOther,
+  ] = await Promise.all([
+    tr("Search title, purpose, content…"),
+    tr("Search documents"),
+    tr("All statuses"),
+    tr("All types"),
+    tr("Policy"),
+    tr("Position"),
+    tr("Resolution"),
+    tr("Statement"),
+    tr("Motion"),
+    tr("Other"),
+  ]);
+
   return (
     <div>
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Documents</h1>
+          <h1 className="text-3xl font-bold">{t("nav.documents")}</h1>
           <p className="mt-1 text-sm text-slate-600">
-            All policy documents visible to you.
+            <T>All policy documents visible to you.</T>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -36,13 +72,13 @@ export default async function DocumentsPage({
             href="/documents/import"
             className="rounded border border-slate-300 px-4 py-2 font-medium hover:bg-slate-50"
           >
-            ↥ Import
+            ↥ <T>Import</T>
           </Link>
           <Link
             href="/documents/new"
             className="rounded bg-volt-600 px-4 py-2 font-medium text-white hover:bg-volt-700"
           >
-            + New document
+            {t("doc.new")}
           </Link>
         </div>
       </div>
@@ -51,41 +87,41 @@ export default async function DocumentsPage({
         <input
           name="q"
           defaultValue={params.q ?? ""}
-          placeholder="Search title, purpose, content…"
+          placeholder={searchPlaceholder}
           className="min-w-[240px] flex-1 rounded border border-slate-300 px-3 py-2"
-          aria-label="Search documents"
+          aria-label={searchAria}
         />
         <select
           name="status"
           defaultValue={params.status ?? ""}
           className="rounded border border-slate-300 px-3 py-2"
-          aria-label="Filter by status"
+          aria-label={t("doc.status")}
         >
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="review">Review</option>
-          <option value="approved">Approved</option>
-          <option value="archived">Archived</option>
+          <option value="">{statusAllLabel}</option>
+          <option value="draft">{t("doc.statusDraft")}</option>
+          <option value="review">{t("doc.statusReview")}</option>
+          <option value="approved">{t("doc.statusApproved")}</option>
+          <option value="archived">{t("doc.statusArchived")}</option>
         </select>
         <select
           name="type"
           defaultValue={params.type ?? ""}
           className="rounded border border-slate-300 px-3 py-2"
-          aria-label="Filter by type"
+          aria-label={t("doc.type")}
         >
-          <option value="">All types</option>
-          <option value="policy">Policy</option>
-          <option value="position">Position</option>
-          <option value="resolution">Resolution</option>
-          <option value="statement">Statement</option>
-          <option value="motion">Motion</option>
-          <option value="other">Other</option>
+          <option value="">{typeAllLabel}</option>
+          <option value="policy">{typePolicy}</option>
+          <option value="position">{typePosition}</option>
+          <option value="resolution">{typeResolution}</option>
+          <option value="statement">{typeStatement}</option>
+          <option value="motion">{typeMotion}</option>
+          <option value="other">{typeOther}</option>
         </select>
         <button
           type="submit"
           className="rounded bg-slate-900 px-4 py-2 text-white"
         >
-          Filter
+          <T>Filter</T>
         </button>
       </form>
 
@@ -100,12 +136,12 @@ export default async function DocumentsPage({
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Lang</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Updated</th>
+                <th className="px-4 py-3">{t("doc.title")}</th>
+                <th className="px-4 py-3">{t("doc.type")}</th>
+                <th className="px-4 py-3">{t("doc.language")}</th>
+                <th className="px-4 py-3">{t("doc.status")}</th>
+                <th className="px-4 py-3">{t("doc.version")}</th>
+                <th className="px-4 py-3"><T>Updated</T></th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -120,12 +156,12 @@ export default async function DocumentsPage({
                     </Link>
                     {d.tags?.length ? (
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {d.tags.map((t) => (
+                        {d.tags.map((tg) => (
                           <span
-                            key={t}
+                            key={tg}
                             className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
                           >
-                            {t}
+                            {tg}
                           </span>
                         ))}
                       </div>
@@ -139,7 +175,7 @@ export default async function DocumentsPage({
                         d.status
                       )}`}
                     >
-                      {d.status}
+                      {t(statusKey[d.status] ?? d.status)}
                     </span>
                   </td>
                   <td className="px-4 py-3">v{d.current_version}</td>
@@ -152,7 +188,7 @@ export default async function DocumentsPage({
           </table>
         ) : (
           <div className="p-8 text-center text-sm text-slate-500">
-            No documents match your filters.
+            <T>No documents match your filters.</T>
           </div>
         )}
       </div>
