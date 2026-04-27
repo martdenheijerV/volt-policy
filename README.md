@@ -191,3 +191,4 @@ Short version:
 - **Email**: Brevo (FR) configured as Authentik's outbound SMTP.
 
 
+ma 27 apr. 2026 09:54:40 CEST
