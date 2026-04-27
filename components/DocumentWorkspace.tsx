@@ -13,7 +13,7 @@ import AIPanel from "./AIPanel";
 import { saveNewVersion, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
-import type { Comment, DocStatus } from "@/lib/types";
+import type { Comment, DocStatus, UserRole } from "@/lib/types";
 
 function colorFromString(s: string): string {
   let h = 0;
@@ -36,6 +36,7 @@ export default function DocumentWorkspace({
   comments,
   currentUserId,
   currentUserName,
+  userRole,
   realtimeUrl,
   realtimeToken,
 }: {
@@ -49,9 +50,19 @@ export default function DocumentWorkspace({
   comments: Comment[];
   currentUserId: string | null;
   currentUserName?: string | null;
+  userRole: UserRole | null;
   realtimeUrl?: string | null;
   realtimeToken?: string | null;
 }) {
+  // Role-based capability flags (mirrors server-side guards in actions.ts).
+  // - Admin: governance — approve, archive, manage. Can also edit (override).
+  // - Editor: create + edit + send to review. Cannot approve.
+  // - Member/Translator: read + comment + propose amendments only.
+  const isAdmin = userRole === "admin";
+  const isEditor = userRole === "editor";
+  const canApprove = isAdmin;
+  const canSendToReview = isAdmin || isEditor;
+  const canArchive = isAdmin;
   const [title, setTitle] = useState(initialTitle);
   const initialHtml = useMemo(() => contentToHtml(initialContent), [initialContent]);
   const [contentHtml, setContentHtml] = useState(initialHtml);
@@ -139,9 +150,15 @@ export default function DocumentWorkspace({
   }
 
   function handleStatus(next: DocStatus) {
+    setError(null);
+    setMessage(null);
     startTransition(async () => {
       try {
-        await updateStatus(documentId, next);
+        const res = await updateStatus(documentId, next);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         setMessage(`Status set to ${next}.`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to update status.");
@@ -265,7 +282,7 @@ export default function DocumentWorkspace({
                 >
                   {pending ? "Saving…" : "Save new version"}
                 </button>
-                {status !== "review" && status !== "approved" && (
+                {status !== "review" && status !== "approved" && canSendToReview && (
                   <button
                     type="button"
                     onClick={() => handleStatus("review")}
@@ -275,7 +292,7 @@ export default function DocumentWorkspace({
                     Send to review
                   </button>
                 )}
-                {status === "review" && (
+                {status === "review" && canApprove && (
                   <button
                     type="button"
                     onClick={() => handleStatus("approved")}
@@ -285,7 +302,12 @@ export default function DocumentWorkspace({
                     Approve
                   </button>
                 )}
-                {status !== "archived" && (
+                {status === "review" && !canApprove && (
+                  <span className="text-xs text-slate-500">
+                    Awaiting admin approval
+                  </span>
+                )}
+                {status !== "archived" && canArchive && (
                   <button
                     type="button"
                     onClick={() => handleStatus("archived")}

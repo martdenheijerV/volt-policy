@@ -184,6 +184,7 @@ export default async function DocumentPage({
         language={doc.language}
         comments={(comments as Comment[]) ?? []}
         currentUserId={user?.id ?? null}
+        userRole={profile?.role ?? null}
       />
     </div>
   );

@@ -265,18 +265,49 @@ export async function saveNewVersion(
 
 export async function updateStatus(documentId: string, status: DocStatus) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Not authenticated." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  // Workflow gates (defense in depth — UI also hides the buttons):
+  // - Editors and admins can move docs to `draft` or `review`.
+  // - Only admins can `approve` or `archive`.
+  if (status === "approved" || status === "archived") {
+    if (me?.role !== "admin") {
+      return {
+        ok: false as const,
+        error:
+          status === "approved"
+            ? "Only admins can approve documents."
+            : "Only admins can archive documents.",
+      };
+    }
+  } else if (me?.role !== "admin" && me?.role !== "editor") {
+    return {
+      ok: false as const,
+      error: "Only editors or admins can change document status.",
+    };
+  }
+
   const patch: Record<string, unknown> = { status };
   if (status === "approved") patch.approved_at = new Date().toISOString();
   const { error } = await supabase
     .from("documents")
     .update(patch)
     .eq("id", documentId);
-  if (error) throw error;
+  if (error) return { ok: false as const, error: error.message };
   await logAudit("document.status_changed", "document", documentId, { status });
   revalidatePath(`/documents/${documentId}`);
   revalidatePath("/documents");
   revalidatePath("/library");
-  return { ok: true };
+  return { ok: true as const };
 }
 
 export async function restoreVersion(
