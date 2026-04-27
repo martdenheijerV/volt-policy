@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 import UserRow from "./UserRow";
+import AddExternalUserForm from "./AddExternalUserForm";
 import type { Profile } from "@/lib/types";
 
 export default async function AdminUsersPage() {
@@ -32,6 +33,10 @@ export default async function AdminUsersPage() {
         and edit; members can comment on review/approved documents;
         translators work on translations.
       </p>
+
+      <div className="mt-6">
+        <AddExternalUserForm />
+      </div>
 
       <div className="mt-6 overflow-hidden rounded-lg border bg-white">
         <table className="w-full text-left text-sm">

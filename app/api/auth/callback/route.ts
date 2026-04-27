@@ -46,19 +46,62 @@ export async function GET(request: Request) {
     );
   }
 
-  // Upsert profile by oidc sub. Only fall back to the sub on FIRST insert;
-  // never overwrite an existing good `full_name` with the sub when the
-  // OIDC provider didn't return a real name on a re-login.
+  // Upsert profile.
+  //
+  // Three cases to handle:
+  //   A. We've seen this oidc_sub before → just update the cached name.
+  //   B. We haven't seen oidc_sub, but an admin pre-created a row keyed on
+  //      email (the "Add external user" flow). Match by lowercased email
+  //      and link the oidc_sub onto that row, preserving the pre-set role.
+  //   C. Fully new user → insert with default role 'member' (or 'admin' if
+  //      the IdP put them in the volt-policy-admin group).
   const sql = getSql();
+  void sql;
   const realName = claims.name ?? claims.preferred_username ?? claims.email ?? null;
   const fullName = realName ?? claims.sub;
-  const isAdmin = (claims.groups ?? []).includes("volt-policy-admin");
+  const emailLower = claims.email ? claims.email.toLowerCase() : null;
+  const isAdminGroup = (claims.groups ?? []).includes("volt-policy-admin");
   const result = await withUser(null, async (tx) => {
-    return await tx`
-      insert into profiles (id, oidc_sub, full_name, role)
-      values (gen_random_uuid(), ${claims.sub}, ${fullName}, ${isAdmin ? "admin" : "member"})
-      on conflict (oidc_sub) do update
-        set full_name = coalesce(${realName}, profiles.full_name)
+    // Make sure the email column exists — older deployments may not have it.
+    await tx`alter table profiles add column if not exists email text`;
+
+    // Case A: existing oidc_sub.
+    const existing = await tx<{ id: string; full_name: string; role: string }[]>`
+      select id, full_name, role from profiles where oidc_sub = ${claims.sub}
+    `;
+    if (existing.length > 0) {
+      await tx`
+        update profiles
+        set full_name = coalesce(${realName}, full_name),
+            email = coalesce(${emailLower}, email)
+        where oidc_sub = ${claims.sub}
+      `;
+      return existing;
+    }
+
+    // Case B: pre-created profile keyed on email.
+    if (emailLower) {
+      const linked = await tx<{ id: string; full_name: string; role: string }[]>`
+        update profiles
+        set oidc_sub = ${claims.sub},
+            full_name = coalesce(${realName}, full_name),
+            email = ${emailLower}
+        where email = ${emailLower} and oidc_sub is null
+        returning id, full_name, role
+      `;
+      if (linked.length > 0) return linked;
+    }
+
+    // Case C: fresh insert.
+    return await tx<{ id: string; full_name: string; role: string }[]>`
+      insert into profiles (id, oidc_sub, full_name, email, role)
+      values (
+        gen_random_uuid(),
+        ${claims.sub},
+        ${fullName},
+        ${emailLower},
+        ${isAdminGroup ? "admin" : "member"}
+      )
       returning id, full_name, role
     `;
   });
