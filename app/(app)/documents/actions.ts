@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 import { slugify } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
+import { notifyAdminsOfPendingReview } from "@/lib/email";
 import type { CommentKind, DocStatus, DocType } from "@/lib/types";
 
 export async function deleteUserGdpr(
@@ -212,7 +213,7 @@ export async function saveNewVersion(
 
   const { data: doc, error: fetchErr } = await supabase
     .from("documents")
-    .select("current_version,status")
+    .select("current_version,status,title,approved_version_number")
     .eq("id", documentId)
     .single();
   if (fetchErr) throw fetchErr;
@@ -256,6 +257,55 @@ export async function saveNewVersion(
     .eq("id", documentId);
   if (updateErr) {
     return { ok: false as const, error: updateErr.message };
+  }
+
+  // Fire off an admin notification when this save creates a pending-review
+  // state on a previously-approved doc. Editors can stage changes without
+  // touching the public version; admins decide whether to publish.
+  const docRow = doc as {
+    current_version: number;
+    status: string;
+    title: string;
+    approved_version_number: number | null;
+  } | null;
+  if (
+    docRow?.status === "approved" &&
+    typeof docRow.approved_version_number === "number" &&
+    docRow.approved_version_number !== nextVersion
+  ) {
+    // Resolve admin emails + the editor's display name. We do this best-effort
+    // and never let a mail failure break the save itself.
+    try {
+      const { data: admins } = await supabase
+        .from("profiles")
+        .select("email,full_name")
+        .eq("role", "admin");
+      const { data: editor } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle<{ full_name: string }>();
+      const adminEmails = (
+        (admins ?? []) as { email: string | null }[]
+      )
+        .map((a) => a.email)
+        .filter((e): e is string => typeof e === "string" && e.length > 0);
+      const appBaseUrl = new URL(
+        process.env.OIDC_REDIRECT_URI ?? "https://policy.voltmaastricht.nl"
+      ).origin;
+      await notifyAdminsOfPendingReview({
+        adminEmails,
+        documentTitle: docRow.title,
+        documentId,
+        editorName: editor?.full_name ?? "An editor",
+        newVersion: nextVersion,
+        approvedVersion: docRow.approved_version_number,
+        changeSummary: data.change_summary || null,
+        appBaseUrl,
+      });
+    } catch (e) {
+      console.error("[saveNewVersion] admin notification failed:", e);
+    }
   }
 
   revalidatePath(`/documents/${documentId}`);
