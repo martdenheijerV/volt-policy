@@ -66,6 +66,16 @@ const en: Dict = {
   "settings.language": "Preferred language",
   "settings.profile": "Profile",
   "help.title": "Help center",
+  "dashboard.subtitle": "Recent activity across Volt policy documents.",
+  "dashboard.newDocs": "New documents (7d)",
+  "dashboard.versionsSaved": "Versions saved (7d)",
+  "dashboard.commentsCount": "Comments (7d)",
+  "dashboard.recentlyUpdated": "Recently updated",
+  "dashboard.topContributors": "Top contributors (7d)",
+  "dashboard.noDocs": "No documents yet.",
+  "dashboard.noActivity": "No activity yet this week.",
+  "dashboard.versions": "versions",
+  "dashboard.updated": "updated",
 };
 
 const nl: Dict = {
@@ -122,6 +132,16 @@ const nl: Dict = {
   "settings.language": "Voorkeurstaal",
   "settings.profile": "Profiel",
   "help.title": "Helpcentrum",
+  "dashboard.subtitle": "Recente activiteit in Volt beleidsdocumenten.",
+  "dashboard.newDocs": "Nieuwe documenten (7d)",
+  "dashboard.versionsSaved": "Versies opgeslagen (7d)",
+  "dashboard.commentsCount": "Reacties (7d)",
+  "dashboard.recentlyUpdated": "Recent gewijzigd",
+  "dashboard.topContributors": "Top bijdragers (7d)",
+  "dashboard.noDocs": "Nog geen documenten.",
+  "dashboard.noActivity": "Geen activiteit deze week.",
+  "dashboard.versions": "versies",
+  "dashboard.updated": "bijgewerkt",
 };
 
 const de: Dict = {
@@ -178,6 +198,16 @@ const de: Dict = {
   "settings.language": "Bevorzugte Sprache",
   "settings.profile": "Profil",
   "help.title": "Hilfecenter",
+  "dashboard.subtitle": "Aktuelle Aktivität in Volt-Richtliniendokumenten.",
+  "dashboard.newDocs": "Neue Dokumente (7T)",
+  "dashboard.versionsSaved": "Gespeicherte Versionen (7T)",
+  "dashboard.commentsCount": "Kommentare (7T)",
+  "dashboard.recentlyUpdated": "Kürzlich aktualisiert",
+  "dashboard.topContributors": "Top-Mitwirkende (7T)",
+  "dashboard.noDocs": "Noch keine Dokumente.",
+  "dashboard.noActivity": "Diese Woche noch keine Aktivität.",
+  "dashboard.versions": "Versionen",
+  "dashboard.updated": "aktualisiert",
 };
 
 const fr: Dict = {
@@ -234,6 +264,16 @@ const fr: Dict = {
   "settings.language": "Langue préférée",
   "settings.profile": "Profil",
   "help.title": "Centre d'aide",
+  "dashboard.subtitle": "Activité récente sur les documents de politique Volt.",
+  "dashboard.newDocs": "Nouveaux documents (7j)",
+  "dashboard.versionsSaved": "Versions enregistrées (7j)",
+  "dashboard.commentsCount": "Commentaires (7j)",
+  "dashboard.recentlyUpdated": "Récemment mis à jour",
+  "dashboard.topContributors": "Top contributeurs (7j)",
+  "dashboard.noDocs": "Aucun document pour le moment.",
+  "dashboard.noActivity": "Aucune activité cette semaine.",
+  "dashboard.versions": "versions",
+  "dashboard.updated": "mis à jour",
 };
 
 const it: Dict = {
@@ -290,6 +330,16 @@ const it: Dict = {
   "settings.language": "Lingua preferita",
   "settings.profile": "Profilo",
   "help.title": "Centro assistenza",
+  "dashboard.subtitle": "Attività recente sui documenti di policy Volt.",
+  "dashboard.newDocs": "Nuovi documenti (7g)",
+  "dashboard.versionsSaved": "Versioni salvate (7g)",
+  "dashboard.commentsCount": "Commenti (7g)",
+  "dashboard.recentlyUpdated": "Aggiornati di recente",
+  "dashboard.topContributors": "Top contributori (7g)",
+  "dashboard.noDocs": "Nessun documento ancora.",
+  "dashboard.noActivity": "Nessuna attività questa settimana.",
+  "dashboard.versions": "versioni",
+  "dashboard.updated": "aggiornato",
 };
 
 const es: Dict = {
@@ -346,6 +396,16 @@ const es: Dict = {
   "settings.language": "Idioma preferido",
   "settings.profile": "Perfil",
   "help.title": "Centro de ayuda",
+  "dashboard.subtitle": "Actividad reciente en documentos de política Volt.",
+  "dashboard.newDocs": "Documentos nuevos (7d)",
+  "dashboard.versionsSaved": "Versiones guardadas (7d)",
+  "dashboard.commentsCount": "Comentarios (7d)",
+  "dashboard.recentlyUpdated": "Actualizados recientemente",
+  "dashboard.topContributors": "Top contribuyentes (7d)",
+  "dashboard.noDocs": "Aún no hay documentos.",
+  "dashboard.noActivity": "Sin actividad esta semana.",
+  "dashboard.versions": "versiones",
+  "dashboard.updated": "actualizado",
 };
 
 export const DICTIONARIES: Record<Lang, Dict> = { en, nl, de, fr, it, es };

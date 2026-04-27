@@ -2,10 +2,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/db/client";
 import { withUser } from "@/lib/db/sql";
 import { getCurrentUserId } from "@/lib/auth/server";
+import { getT } from "@/lib/i18n/server";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import type { Document } from "@/lib/types";
 
 export default async function DashboardPage() {
+  const { t } = await getT();
   const supabase = await createClient();
 
   const { data: recent } = await supabase
@@ -67,41 +69,48 @@ export default async function DashboardPage() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
+  const statusKey: Record<string, string> = {
+    draft: "doc.statusDraft",
+    review: "doc.statusReview",
+    approved: "doc.statusApproved",
+    archived: "doc.statusArchived",
+  };
+
   return (
     <div>
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Recent activity across Volt policy documents.
-          </p>
+          <h1 className="text-3xl font-bold">{t("nav.dashboard")}</h1>
+          <p className="mt-1 text-sm text-slate-600">{t("dashboard.subtitle")}</p>
         </div>
         <Link
           href="/documents/new"
           className="rounded bg-volt-600 px-4 py-2 font-medium text-white hover:bg-volt-700"
         >
-          + New document
+          {t("doc.new")}
         </Link>
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-4">
         {["draft", "review", "approved", "archived"].map((s) => (
           <div key={s} className="rounded-lg border bg-white p-4">
-            <div className="text-xs uppercase tracking-wider text-slate-500">{s}</div>
+            <div className="text-xs uppercase tracking-wider text-slate-500">
+              {t(statusKey[s])}
+            </div>
             <div className="mt-1 text-3xl font-bold">{countByStatus[s] ?? 0}</div>
           </div>
         ))}
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <Stat label="New documents (7d)" value={(weekDocs ?? []).length} />
-        <Stat label="Versions saved (7d)" value={weekVersions.length} />
-        <Stat label="Comments (7d)" value={(weekComments ?? []).length} />
+        <Stat label={t("dashboard.newDocs")} value={(weekDocs ?? []).length} />
+        <Stat label={t("dashboard.versionsSaved")} value={weekVersions.length} />
+        <Stat label={t("dashboard.commentsCount")} value={(weekComments ?? []).length} />
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <section>
-          <h2 className="text-xl font-semibold">Recently updated</h2>
+          <h2 className="text-xl font-semibold">{t("dashboard.recentlyUpdated")}</h2>
           <div className="mt-4 overflow-hidden rounded-lg border bg-white">
             {(recent as Document[] | null)?.length ? (
               <ul className="divide-y">
@@ -114,8 +123,8 @@ export default async function DashboardPage() {
                       <div className="min-w-0">
                         <div className="truncate font-medium">{d.title}</div>
                         <div className="text-xs text-slate-500">
-                          {d.document_type} · v{d.current_version} · updated{" "}
-                          {formatDate(d.updated_at)}
+                          {d.document_type} · v{d.current_version} ·{" "}
+                          {t("dashboard.updated")} {formatDate(d.updated_at)}
                         </div>
                       </div>
                       <span
@@ -123,7 +132,7 @@ export default async function DashboardPage() {
                           d.status
                         )}`}
                       >
-                        {d.status}
+                        {t(statusKey[d.status] ?? d.status)}
                       </span>
                     </Link>
                   </li>
@@ -131,14 +140,14 @@ export default async function DashboardPage() {
               </ul>
             ) : (
               <div className="p-8 text-center text-sm text-slate-500">
-                No documents yet.
+                {t("dashboard.noDocs")}
               </div>
             )}
           </div>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold">Top contributors (7d)</h2>
+          <h2 className="text-xl font-semibold">{t("dashboard.topContributors")}</h2>
           <div className="mt-4 overflow-hidden rounded-lg border bg-white">
             {topContributors.length ? (
               <ul className="divide-y">
@@ -149,14 +158,14 @@ export default async function DashboardPage() {
                   >
                     <span>{c.name}</span>
                     <span className="rounded bg-volt-50 px-2 py-0.5 text-xs font-medium text-volt-700">
-                      {c.count} versions
+                      {c.count} {t("dashboard.versions")}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
               <div className="p-8 text-center text-sm text-slate-500">
-                No activity yet this week.
+                {t("dashboard.noActivity")}
               </div>
             )}
           </div>
