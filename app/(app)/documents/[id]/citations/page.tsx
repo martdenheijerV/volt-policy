@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 import { addCitation, deleteCitation } from "./actions";
+import { T } from "@/components/T";
+import { getTr } from "@/lib/i18n/server";
 
 export default async function CitationsPage({
   params,
@@ -10,6 +12,7 @@ export default async function CitationsPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { tr } = await getTr();
   const { data: doc } = await supabase
     .from("documents")
     .select("id,title")
@@ -23,16 +26,41 @@ export default async function CitationsPage({
     .eq("document_id", id)
     .order("cite_key");
 
+  const [
+    titleLabel,
+    authorLabel,
+    yearLabel,
+    sourceLabel,
+    urlLabel,
+    addCitationLabel,
+    linkLabel,
+    deleteLabel,
+    noCitations,
+  ] = await Promise.all([
+    tr("Title"),
+    tr("Author"),
+    tr("Year"),
+    tr("Source / Publisher"),
+    tr("URL"),
+    tr("Add citation"),
+    tr("Link"),
+    tr("Delete"),
+    tr("No citations yet."),
+  ]);
+
   return (
     <div className="max-w-2xl">
       <Link href={`/documents/${id}`} className="text-sm text-slate-500 hover:underline">
-        ← Back to document
+        ← <T>Back to document</T>
       </Link>
-      <h1 className="mt-2 text-3xl font-bold">Citations</h1>
+      <h1 className="mt-2 text-3xl font-bold">
+        <T>Citations</T>
+      </h1>
       <p className="mt-1 text-sm text-slate-600">
-        Reference using{" "}
-        <code>[@cite_key]</code> in the document body. Bibliography is
-        auto-rendered on export.
+        <T>
+          Reference using [@cite_key] in the document body. Bibliography is
+          auto-rendered on export.
+        </T>
       </p>
 
       <form
@@ -53,7 +81,7 @@ export default async function CitationsPage({
         </div>
         <div>
           <label className="block text-xs uppercase tracking-wider text-slate-500">
-            Title *
+            {titleLabel} *
           </label>
           <input
             name="title"
@@ -63,31 +91,31 @@ export default async function CitationsPage({
         </div>
         <div>
           <label className="block text-xs uppercase tracking-wider text-slate-500">
-            Author
+            {authorLabel}
           </label>
           <input name="author" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-xs uppercase tracking-wider text-slate-500">
-            Year
+            {yearLabel}
           </label>
           <input name="year" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-xs uppercase tracking-wider text-slate-500">
-            Source / Publisher
+            {sourceLabel}
           </label>
           <input name="source" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" />
         </div>
         <div>
           <label className="block text-xs uppercase tracking-wider text-slate-500">
-            URL
+            {urlLabel}
           </label>
           <input name="url" className="mt-1 w-full rounded border border-slate-300 px-3 py-2" />
         </div>
         <div className="sm:col-span-2">
           <button className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700">
-            Add citation
+            {addCitationLabel}
           </button>
         </div>
       </form>
@@ -112,20 +140,20 @@ export default async function CitationsPage({
                       rel="noopener noreferrer"
                       className="text-volt-700 underline"
                     >
-                      Link
+                      {linkLabel}
                     </a>
                   )}
                 </div>
               </div>
               <form action={async () => { "use server"; await deleteCitation(c.id, id); }}>
-                <button className="text-xs text-red-700 hover:underline">Delete</button>
+                <button className="text-xs text-red-700 hover:underline">{deleteLabel}</button>
               </form>
             </div>
           </li>
         ))}
         {(cites ?? []).length === 0 && (
           <li className="rounded border bg-white p-6 text-center text-sm text-slate-500">
-            No citations yet.
+            {noCitations}
           </li>
         )}
       </ul>

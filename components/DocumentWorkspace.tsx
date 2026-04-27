@@ -43,8 +43,10 @@ export interface DocumentWorkspaceLabels {
   awaitingApproval: string;
   required: string;
   changeSummaryRequired: string;
-  savedAsVersion: (n: number) => string;
-  statusSetTo: (statusLabel: string) => string;
+  /** Template "Saved as v{n}." — {n} is replaced client-side. */
+  savedAsVersionTpl: string;
+  /** Template "Status set to {status}." — {status} is replaced client-side. */
+  statusSetToTpl: string;
   failedToSave: string;
   failedToUpdateStatus: string;
   status: Record<DocStatus, string>;
@@ -171,7 +173,7 @@ export default function DocumentWorkspace({
         setSavedTitle(title);
         setSavedHtml(contentHtml);
         setChangeSummary("");
-        setMessage(labels.savedAsVersion(res.version));
+        setMessage(labels.savedAsVersionTpl.replace("{n}", String(res.version)));
       } catch (e) {
         setError(e instanceof Error ? e.message : labels.failedToSave);
       }
@@ -188,7 +190,9 @@ export default function DocumentWorkspace({
           setError(res.error);
           return;
         }
-        setMessage(labels.statusSetTo(labels.status[next]));
+        setMessage(
+          labels.statusSetToTpl.replace("{status}", labels.status[next])
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : labels.failedToUpdateStatus);
       }

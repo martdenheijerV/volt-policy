@@ -1,29 +1,48 @@
+import { T } from "@/components/T";
+
 export default function HelpReview() {
   return (
     <>
-      <h1>Review &amp; approve</h1>
-      <h2>Status workflow</h2>
+      <h1>
+        <T>Review &amp; approve</T>
+      </h1>
+      <h2>
+        <T>Status workflow</T>
+      </h2>
       <p>
-        Documents move through four states: <code>draft</code> →
-        <code>review</code> → <code>approved</code> → optionally
-        <code>archived</code>.
+        <T>
+          Documents move through four states: draft → review → approved →
+          optionally archived.
+        </T>
       </p>
-      <h2>Sending to review</h2>
+      <h2>
+        <T>Sending to review</T>
+      </h2>
       <p>
-        From the editor toolbar, click <strong>Send to review</strong>. Members
-        and translators can now read and comment, but the public library still
-        does not show the document.
+        <T>
+          From the editor toolbar, click Send to review. Members and
+          translators can now read and comment, but the public library still
+          does not show the document.
+        </T>
       </p>
-      <h2>Approving</h2>
+      <h2>
+        <T>Approving</T>
+      </h2>
       <p>
-        Admins (or the document owner if granted) click <strong>Approve</strong>.
-        The document becomes visible at <code>/library/&lt;slug&gt;</code> with no
-        login required.
+        <T>
+          Admins (or the document owner if granted) click Approve. The
+          document becomes visible at /library/&lt;slug&gt; with no login
+          required.
+        </T>
       </p>
-      <h2>Archiving</h2>
+      <h2>
+        <T>Archiving</T>
+      </h2>
       <p>
-        Outdated approved documents can be archived. They disappear from the
-        public library but remain in the audit trail and can be restored.
+        <T>
+          Outdated approved documents can be archived. They disappear from the
+          public library but remain in the audit trail and can be restored.
+        </T>
       </p>
     </>
   );

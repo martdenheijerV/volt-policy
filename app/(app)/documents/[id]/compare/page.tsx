@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 import { htmlToText, lineDiff } from "@/lib/diff";
+import { T } from "@/components/T";
+import { getTr } from "@/lib/i18n/server";
 
 export default async function ComparePage({
   params,
@@ -39,15 +41,20 @@ export default async function ComparePage({
   const adds = ops.filter((o) => o.type === "add").length;
   const dels = ops.filter((o) => o.type === "del").length;
 
+  const { tr } = await getTr();
+  const changeSummaryTpl = await tr("v{n} change summary:");
+
   return (
     <div>
       <Link
         href={`/documents/${id}/history`}
         className="text-sm text-slate-500 hover:underline"
       >
-        ← Back to history
+        ← <T>Back to history</T>
       </Link>
-      <h1 className="mt-2 text-3xl font-bold">Compare versions</h1>
+      <h1 className="mt-2 text-3xl font-bold">
+        <T>Compare versions</T>
+      </h1>
       <p className="mt-1 text-sm text-slate-600">
         {doc.title} — v{fromV} → v{toV}{" "}
         <span className="ml-3 inline-flex items-center gap-2 text-xs">
@@ -62,7 +69,9 @@ export default async function ComparePage({
 
       {toVer.change_summary && (
         <div className="mt-4 rounded border bg-slate-50 p-3 text-sm">
-          <span className="font-medium">v{toV} change summary:</span>{" "}
+          <span className="font-medium">
+            {changeSummaryTpl.replace("{n}", String(toV))}
+          </span>{" "}
           {toVer.change_summary}
         </div>
       )}

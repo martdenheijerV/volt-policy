@@ -4,12 +4,42 @@ import { useState, useTransition } from "react";
 import { createExternalUser } from "./actions";
 import type { UserRole } from "@/lib/types";
 
+export interface AddExternalUserFormLabels {
+  openButton: string;
+  successHeading: string;
+  successBody: string;
+  loginUrl: string;
+  username: string;
+  tempPassword: string;
+  firstLoginNote: string;
+  close: string;
+  addAnother: string;
+  formHeading: string;
+  formIntro: string;
+  name: string;
+  namePlaceholder: string;
+  email: string;
+  emailPlaceholder: string;
+  role: string;
+  roleMember: string;
+  roleEditor: string;
+  roleTranslator: string;
+  roleAdmin: string;
+  creating: string;
+  create: string;
+  cancel: string;
+}
+
 /**
  * Inline form for admins to create an external user that doesn't sit in any
  * Volt SSO directory. On success it shows a one-time temp password — once
  * dismissed, it can't be retrieved again.
  */
-export default function AddExternalUserForm() {
+export default function AddExternalUserForm({
+  labels,
+}: {
+  labels: AddExternalUserFormLabels;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -43,7 +73,7 @@ export default function AddExternalUserForm() {
         onClick={() => setOpen(true)}
         className="rounded bg-volt-600 px-3 py-2 text-sm font-medium text-white hover:bg-volt-700"
       >
-        + Voeg externe gebruiker toe
+        + {labels.openButton}
       </button>
     );
   }
@@ -56,38 +86,30 @@ export default function AddExternalUserForm() {
         className="rounded border border-emerald-300 bg-emerald-50 p-4 text-sm"
       >
         <p className="font-medium text-emerald-900">
-          ✓ Externe gebruiker aangemaakt
+          ✓ {labels.successHeading}
         </p>
-        <p className="mt-2 text-slate-700">
-          Stuur deze gegevens door. Het wachtwoord wordt maar één keer
-          getoond. De ontvanger gaat naar de Login URL en logt direct in op
-          Authentik met de username + tijdelijk wachtwoord (geen "Continue
-          with Volt Auth" knop nodig — die is voor SSO-gebruikers).
-        </p>
+        <p className="mt-2 text-slate-700">{labels.successBody}</p>
         <dl className="mt-3 grid gap-2 text-slate-800 sm:grid-cols-[120px_1fr]">
-          <dt className="font-medium">Login URL</dt>
+          <dt className="font-medium">{labels.loginUrl}</dt>
           <dd>
             <code className="rounded bg-white px-2 py-0.5">
               {result.loginUrl}
             </code>
           </dd>
-          <dt className="font-medium">Username</dt>
+          <dt className="font-medium">{labels.username}</dt>
           <dd>
             <code className="rounded bg-white px-2 py-0.5">
               {result.username}
             </code>
           </dd>
-          <dt className="font-medium">Tijdelijk wachtwoord</dt>
+          <dt className="font-medium">{labels.tempPassword}</dt>
           <dd>
             <code className="rounded bg-white px-2 py-0.5 font-mono">
               {result.tempPassword}
             </code>
           </dd>
         </dl>
-        <p className="mt-3 text-xs text-slate-600">
-          Bij de eerste login moet de gebruiker het wachtwoord wijzigen via
-          Authentik.
-        </p>
+        <p className="mt-3 text-xs text-slate-600">{labels.firstLoginNote}</p>
         <div className="mt-4 flex gap-2">
           <button
             type="button"
@@ -97,14 +119,14 @@ export default function AddExternalUserForm() {
             }}
             className="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100"
           >
-            Sluiten
+            {labels.close}
           </button>
           <button
             type="button"
             onClick={reset}
             className="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100"
           >
-            Nog een gebruiker toevoegen
+            {labels.addAnother}
           </button>
         </div>
       </div>
@@ -113,11 +135,8 @@ export default function AddExternalUserForm() {
 
   return (
     <div className="rounded border border-slate-300 bg-slate-50 p-4">
-      <h3 className="text-sm font-medium">Externe gebruiker toevoegen</h3>
-      <p className="mt-1 text-xs text-slate-600">
-        Voor mensen die niet in een Volt SSO-directory zitten. Ze krijgen een
-        Authentik-account met tijdelijk wachtwoord en kunnen daarmee inloggen.
-      </p>
+      <h3 className="text-sm font-medium">{labels.formHeading}</h3>
+      <p className="mt-1 text-xs text-slate-600">{labels.formIntro}</p>
 
       {result && !result.ok && (
         <p
@@ -130,19 +149,21 @@ export default function AddExternalUserForm() {
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
-          <span className="block text-xs font-medium text-slate-600">Naam</span>
+          <span className="block text-xs font-medium text-slate-600">
+            {labels.name}
+          </span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={pending}
             className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            placeholder="Voor- en achternaam"
+            placeholder={labels.namePlaceholder}
             required
           />
         </label>
         <label className="block text-sm">
           <span className="block text-xs font-medium text-slate-600">
-            E-mailadres
+            {labels.email}
           </span>
           <input
             type="email"
@@ -150,22 +171,24 @@ export default function AddExternalUserForm() {
             onChange={(e) => setEmail(e.target.value)}
             disabled={pending}
             className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            placeholder="naam@voorbeeld.org"
+            placeholder={labels.emailPlaceholder}
             required
           />
         </label>
         <label className="block text-sm">
-          <span className="block text-xs font-medium text-slate-600">Rol</span>
+          <span className="block text-xs font-medium text-slate-600">
+            {labels.role}
+          </span>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as UserRole)}
             disabled={pending}
             className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
           >
-            <option value="member">Member (alleen lezen + commenten)</option>
-            <option value="editor">Editor (aanmaken + bewerken)</option>
-            <option value="translator">Translator (vertaalwerk)</option>
-            <option value="admin">Admin (overzicht + approve)</option>
+            <option value="member">{labels.roleMember}</option>
+            <option value="editor">{labels.roleEditor}</option>
+            <option value="translator">{labels.roleTranslator}</option>
+            <option value="admin">{labels.roleAdmin}</option>
           </select>
         </label>
       </div>
@@ -177,7 +200,7 @@ export default function AddExternalUserForm() {
           disabled={pending || !name.trim() || !email.trim()}
           className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
         >
-          {pending ? "Aanmaken..." : "Aanmaken"}
+          {pending ? labels.creating : labels.create}
         </button>
         <button
           type="button"
@@ -188,7 +211,7 @@ export default function AddExternalUserForm() {
           disabled={pending}
           className="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100"
         >
-          Annuleren
+          {labels.cancel}
         </button>
       </div>
     </div>

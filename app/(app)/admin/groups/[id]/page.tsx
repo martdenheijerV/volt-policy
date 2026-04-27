@@ -9,7 +9,9 @@ import {
   removeMember,
   deleteGroup,
 } from "../actions";
-import GroupActions from "./GroupActions";
+import GroupActions, { type GroupActionsLabels } from "./GroupActions";
+import { T } from "@/components/T";
+import { getT, getTr } from "@/lib/i18n/server";
 
 export default async function GroupDetailPage({
   params,
@@ -18,6 +20,8 @@ export default async function GroupDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const { t } = await getT();
+  const { tr } = await getTr();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -66,10 +70,64 @@ export default async function GroupDetailPage({
     .select("id,full_name,role")
     .order("full_name");
 
+  const [
+    typeAll,
+    statusAll,
+    addRule,
+    readCol,
+    commentCol,
+    editCol,
+    typeCol,
+    statusCol,
+    unknown,
+    remove,
+    noMembers,
+    noRules,
+    deleteGroupBtn,
+    typePolicy,
+    typePosition,
+    typeResolution,
+    typeStatement,
+    typeMotion,
+    typeOther,
+    addMemberLabel,
+    addLabel,
+    addingLabel,
+  ] = await Promise.all([
+    tr("Any"),
+    tr("Any"),
+    tr("Add rule"),
+    tr("Read"),
+    tr("Comment"),
+    tr("Edit"),
+    tr("Type"),
+    tr("Status"),
+    tr("Unknown"),
+    tr("Remove"),
+    tr("No members"),
+    tr("No rules yet"),
+    tr("Delete group"),
+    tr("Policy"),
+    tr("Position"),
+    tr("Resolution"),
+    tr("Statement"),
+    tr("Motion"),
+    tr("Other"),
+    tr("Add member…"),
+    tr("Add"),
+    tr("Adding…"),
+  ]);
+
+  const groupActionsLabels: GroupActionsLabels = {
+    addMember: addMemberLabel,
+    add: addLabel,
+    adding: addingLabel,
+  };
+
   return (
     <div>
       <Link href="/admin/groups" className="text-sm text-slate-500 hover:underline">
-        ← All groups
+        ← <T>All groups</T>
       </Link>
       <h1 className="mt-2 text-3xl font-bold">{group.name}</h1>
       {group.description && <p className="mt-1 text-slate-600">{group.description}</p>}
@@ -78,75 +136,82 @@ export default async function GroupDetailPage({
         groupId={group.id}
         allProfiles={allProfiles ?? []}
         memberIds={members.map((m) => m.user_id)}
+        labels={groupActionsLabels}
       />
 
-      <h2 className="mt-8 text-xl font-semibold">Members</h2>
+      <h2 className="mt-8 text-xl font-semibold">
+        <T>Members</T>
+      </h2>
       <div className="mt-3 overflow-hidden rounded-lg border bg-white">
         <table className="w-full text-left text-sm">
           <tbody className="divide-y">
             {members.map((m) => (
               <tr key={m.user_id} className="hover:bg-slate-50">
                 <td className="px-4 py-2">
-                  {m.full_name ?? <em className="text-slate-400">Unknown</em>}
+                  {m.full_name ?? <em className="text-slate-400">{unknown}</em>}
                 </td>
                 <td className="px-4 py-2 text-slate-500 capitalize">{m.role}</td>
                 <td className="px-4 py-2 text-right">
                   <form action={async () => { "use server"; await removeMember(group.id, m.user_id); }}>
-                    <button className="text-xs text-red-700 hover:underline">Remove</button>
+                    <button className="text-xs text-red-700 hover:underline">{remove}</button>
                   </form>
                 </td>
               </tr>
             ))}
             {members.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-sm text-slate-500">No members</td>
+                <td className="p-4 text-center text-sm text-slate-500">{noMembers}</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <h2 className="mt-8 text-xl font-semibold">Permission rules</h2>
+      <h2 className="mt-8 text-xl font-semibold">
+        <T>Permission rules</T>
+      </h2>
       <p className="mt-1 text-sm text-slate-600">
-        Each rule says: members of this group get the checked permissions on
-        documents matching the chosen type and status (leave blank = any).
+        <T>
+          Each rule says: members of this group get the checked permissions on
+          documents matching the chosen type and status (leave blank = any).
+        </T>
       </p>
 
       <form action={addGroupPermission} className="mt-3 flex flex-wrap items-end gap-3 rounded border bg-white p-4">
         <input type="hidden" name="group_id" value={group.id} />
         <div>
-          <label className="block text-xs uppercase tracking-wider text-slate-500">Type</label>
+          <label className="block text-xs uppercase tracking-wider text-slate-500">{typeCol}</label>
           <select name="document_type" className="mt-1 rounded border border-slate-300 px-2 py-1">
-            <option value="">Any</option>
-            <option value="policy">Policy</option>
-            <option value="position">Position</option>
-            <option value="resolution">Resolution</option>
-            <option value="statement">Statement</option>
-            <option value="motion">Motion</option>
-            <option value="other">Other</option>
+            <option value="">{typeAll}</option>
+            <option value="policy">{typePolicy}</option>
+            <option value="position">{typePosition}</option>
+            <option value="resolution">{typeResolution}</option>
+            <option value="statement">{typeStatement}</option>
+            <option value="motion">{typeMotion}</option>
+            <option value="other">{typeOther}</option>
           </select>
         </div>
         <div>
-          <label className="block text-xs uppercase tracking-wider text-slate-500">Status</label>
+          <label className="block text-xs uppercase tracking-wider text-slate-500">{statusCol}</label>
           <select name="status" className="mt-1 rounded border border-slate-300 px-2 py-1">
-            <option value="">Any</option>
-            <option value="draft">Draft</option>
-            <option value="review">Review</option>
-            <option value="approved">Approved</option>
-            <option value="archived">Archived</option>
+            <option value="">{statusAll}</option>
+            <option value="draft">{t("doc.statusDraft")}</option>
+            <option value="review">{t("doc.statusReview")}</option>
+            <option value="approved">{t("doc.statusApproved")}</option>
+            <option value="archived">{t("doc.statusArchived")}</option>
           </select>
         </div>
         <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" name="can_read" defaultChecked /> Read
+          <input type="checkbox" name="can_read" defaultChecked /> {readCol}
         </label>
         <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" name="can_comment" defaultChecked /> Comment
+          <input type="checkbox" name="can_comment" defaultChecked /> {commentCol}
         </label>
         <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" name="can_edit" /> Edit
+          <input type="checkbox" name="can_edit" /> {editCol}
         </label>
         <button type="submit" className="rounded bg-volt-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-volt-700">
-          Add rule
+          {addRule}
         </button>
       </form>
 
@@ -154,11 +219,11 @@ export default async function GroupDetailPage({
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             <tr>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Read</th>
-              <th className="px-4 py-2">Comment</th>
-              <th className="px-4 py-2">Edit</th>
+              <th className="px-4 py-2">{typeCol}</th>
+              <th className="px-4 py-2">{statusCol}</th>
+              <th className="px-4 py-2">{readCol}</th>
+              <th className="px-4 py-2">{commentCol}</th>
+              <th className="px-4 py-2">{editCol}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -172,7 +237,7 @@ export default async function GroupDetailPage({
                 <td className="px-4 py-2">{r.can_edit ? "✓" : ""}</td>
                 <td className="px-4 py-2 text-right">
                   <form action={async () => { "use server"; await deleteGroupPermission(r.id, group.id); }}>
-                    <button className="text-xs text-red-700 hover:underline">Remove</button>
+                    <button className="text-xs text-red-700 hover:underline">{remove}</button>
                   </form>
                 </td>
               </tr>
@@ -180,7 +245,7 @@ export default async function GroupDetailPage({
             {(permissions ?? []).length === 0 && (
               <tr>
                 <td colSpan={6} className="p-4 text-center text-sm text-slate-500">
-                  No rules yet
+                  {noRules}
                 </td>
               </tr>
             )}
@@ -190,7 +255,7 @@ export default async function GroupDetailPage({
 
       <form action={async () => { "use server"; await deleteGroup(group.id); redirect("/admin/groups"); }} className="mt-10">
         <button className="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
-          Delete group
+          {deleteGroupBtn}
         </button>
       </form>
     </div>

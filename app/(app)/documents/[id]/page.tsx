@@ -369,8 +369,8 @@ async function buildWorkspaceLabels(
     awaitingApproval,
     required,
     changeSummaryRequired,
-    savedAsVersion: (n: number) => savedAsVersionTpl.replace("{n}", String(n)),
-    statusSetTo: (s: string) => statusSetToTpl.replace("{status}", s),
+    savedAsVersionTpl,
+    statusSetToTpl,
     failedToSave,
     failedToUpdateStatus,
     status: {
@@ -466,8 +466,8 @@ async function buildCommentsLabels(
     posting,
     postReply,
     postComment,
-    open: (n: number) => openTpl.replace("{n}", String(n)),
-    resolved: (n: number) => resolvedTpl.replace("{n}", String(n)),
+    openTpl,
+    resolvedTpl,
     noOpen,
     reply,
     resolve,
@@ -517,9 +517,9 @@ async function buildAILabels(
     grammarCheck,
     cefrHeading,
     cefrAnalyze,
-    cefrScore: (n: number) => cefrScoreTpl.replace("{n}", String(n)),
-    cefrAvgSentence: (n: string) => cefrAvgSentenceTpl.replace("{n}", n),
-    cefrLongWord: (n: string) => cefrLongWordTpl.replace("{n}", n),
+    cefrScoreTpl,
+    cefrAvgSentenceTpl,
+    cefrLongWordTpl,
     failed,
     ellipsis,
   };
@@ -571,16 +571,10 @@ async function buildPendingReviewLabels(
   ]);
   return {
     heading,
-    body: ({ currentVersion, approvedVersion, authorName }) => {
-      const tpl = authorName ? bodyTpl : bodyTplNoAuthor;
-      return tpl
-        .replace("{n}", String(currentVersion))
-        .replace("{m}", String(approvedVersion))
-        .replace("{author}", authorName ?? "");
-    },
+    bodyTpl,
+    bodyTplNoAuthor,
     changeSummary,
-    viewDiff: (from: number, to: number) =>
-      viewDiffTpl.replace("{from}", String(from)).replace("{to}", String(to)),
+    viewDiffTpl,
     approve,
     reject,
     busy,

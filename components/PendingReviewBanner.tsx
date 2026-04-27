@@ -8,13 +8,13 @@ import {
 
 export interface PendingReviewBannerLabels {
   heading: string;
-  body: (args: {
-    currentVersion: number;
-    approvedVersion: number;
-    authorName: string | null;
-  }) => string;
+  /** Template "Version v{n} has been saved by {author}. Public still sees v{m}..." */
+  bodyTpl: string;
+  /** Template used when no author name is known (no {author} placeholder). */
+  bodyTplNoAuthor: string;
   changeSummary: string;
-  viewDiff: (from: number, to: number) => string;
+  /** Template "View diff (v{from} → v{to})" */
+  viewDiffTpl: string;
   approve: string;
   reject: string;
   busy: string;
@@ -79,11 +79,10 @@ export default function PendingReviewBanner({
     >
       <p className="font-medium text-amber-900">⚠️ {labels.heading}</p>
       <p className="mt-1 text-sm text-amber-900">
-        {labels.body({
-          currentVersion,
-          approvedVersion,
-          authorName: pendingAuthorName ?? null,
-        })}
+        {(pendingAuthorName ? labels.bodyTpl : labels.bodyTplNoAuthor)
+          .replace("{n}", String(currentVersion))
+          .replace("{m}", String(approvedVersion))
+          .replace("{author}", pendingAuthorName ?? "")}
       </p>
       {pendingChangeSummary && (
         <p className="mt-2 rounded bg-white/60 px-3 py-2 text-xs text-amber-900">
@@ -103,7 +102,9 @@ export default function PendingReviewBanner({
           href={`/documents/${documentId}/compare?from=${approvedVersion}&to=${currentVersion}`}
           className="rounded border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
         >
-          {labels.viewDiff(approvedVersion, currentVersion)}
+          {labels.viewDiffTpl
+            .replace("{from}", String(approvedVersion))
+            .replace("{to}", String(currentVersion))}
         </a>
 
         <button

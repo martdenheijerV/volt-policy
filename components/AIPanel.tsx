@@ -11,9 +11,12 @@ export interface AIPanelLabels {
   grammarCheck: string;
   cefrHeading: string;
   cefrAnalyze: string;
-  cefrScore: (n: number) => string;
-  cefrAvgSentence: (n: string) => string;
-  cefrLongWord: (n: string) => string;
+  /** Template "(score {n}/100)" — {n} is replaced client-side. */
+  cefrScoreTpl: string;
+  /** Template "Avg sentence length: {n} words" — {n} is replaced client-side. */
+  cefrAvgSentenceTpl: string;
+  /** Template "Long-word ratio: {n}%" — {n} is replaced client-side. */
+  cefrLongWordTpl: string;
   failed: string;
   ellipsis: string;
 }
@@ -240,13 +243,21 @@ function CefrSection({
         <div className="mt-2 rounded bg-slate-50 p-3 text-xs">
           <div>
             <span className="font-medium">{result.level}</span>{" "}
-            <span className="text-slate-500">{labels.cefrScore(result.score)}</span>
+            <span className="text-slate-500">
+              {labels.cefrScoreTpl.replace("{n}", String(result.score))}
+            </span>
           </div>
           <div className="text-slate-600">
-            {labels.cefrAvgSentence(result.avgSentenceLength.toFixed(1))}
+            {labels.cefrAvgSentenceTpl.replace(
+              "{n}",
+              result.avgSentenceLength.toFixed(1)
+            )}
           </div>
           <div className="text-slate-600">
-            {labels.cefrLongWord((result.longWordRatio * 100).toFixed(1))}
+            {labels.cefrLongWordTpl.replace(
+              "{n}",
+              (result.longWordRatio * 100).toFixed(1)
+            )}
           </div>
         </div>
       )}

@@ -37,8 +37,10 @@ export interface CommentsPanelLabels {
   posting: string;
   postReply: string;
   postComment: string;
-  open: (n: number) => string;
-  resolved: (n: number) => string;
+  /** Template "Open ({n})" — {n} is replaced client-side. */
+  openTpl: string;
+  /** Template "Resolved ({n})" — {n} is replaced client-side. */
+  resolvedTpl: string;
   noOpen: string;
   reply: string;
   resolve: string;
@@ -259,7 +261,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
 
         <div className="mt-5">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {labels.open(open.length)}
+            {labels.openTpl.replace("{n}", String(open.length))}
           </h3>
           <ul className="mt-2 space-y-3">
             {open.length === 0 && (
@@ -284,7 +286,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         {resolved.length > 0 && (
           <div className="mt-5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {labels.resolved(resolved.length)}
+              {labels.resolvedTpl.replace("{n}", String(resolved.length))}
             </h3>
             <ul className="mt-2 space-y-3 opacity-60">
               {resolved.map((c) => (

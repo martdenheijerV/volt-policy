@@ -4,14 +4,22 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addMember } from "../actions";
 
+export interface GroupActionsLabels {
+  addMember: string;
+  add: string;
+  adding: string;
+}
+
 export default function GroupActions({
   groupId,
   allProfiles,
   memberIds,
+  labels,
 }: {
   groupId: string;
   allProfiles: { id: string; full_name: string | null; role: string }[];
   memberIds: string[];
+  labels: GroupActionsLabels;
 }) {
   const [selected, setSelected] = useState("");
   const [pending, start] = useTransition();
@@ -34,7 +42,7 @@ export default function GroupActions({
         onChange={(e) => setSelected(e.target.value)}
         className="rounded border border-slate-300 px-2 py-1"
       >
-        <option value="">Add member…</option>
+        <option value="">{labels.addMember}</option>
         {candidates.map((p) => (
           <option key={p.id} value={p.id}>
             {p.full_name ?? p.id} ({p.role})
@@ -47,7 +55,7 @@ export default function GroupActions({
         disabled={!selected || pending}
         className="rounded bg-volt-600 px-3 py-1 text-xs font-medium text-white hover:bg-volt-700 disabled:opacity-50"
       >
-        {pending ? "Adding…" : "Add"}
+        {pending ? labels.adding : labels.add}
       </button>
     </div>
   );
