@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 import DocumentWorkspace from "@/components/DocumentWorkspace";
 import MetadataPanel from "@/components/MetadataPanel";
+import PendingReviewBanner from "@/components/PendingReviewBanner";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import type { Comment, Document, Profile } from "@/lib/types";
 
@@ -22,7 +23,7 @@ export default async function DocumentPage({
     .from("documents")
     .select("*")
     .eq("id", id)
-    .maybeSingle<Document>();
+    .maybeSingle<Document & { approved_version_number?: number | null }>();
 
   if (!doc) notFound();
 
@@ -71,6 +72,33 @@ export default async function DocumentPage({
       profile?.role === "editor" ||
       doc.owner_id === user.id ||
       !!permission?.can_edit);
+
+  // Pending-review state: editor saved a new version on top of an already-
+  // approved doc, and the admin hasn't decided yet. Public still sees the
+  // previously-approved snapshot.
+  const hasPendingReview =
+    doc.status === "approved" &&
+    typeof doc.approved_version_number === "number" &&
+    doc.approved_version_number !== doc.current_version;
+  let pendingAuthorName: string | null = null;
+  let pendingChangeSummary: string | null = null;
+  if (hasPendingReview) {
+    const { data: pendingVersion } = await supabase
+      .from("document_versions")
+      .select("author_id,change_summary")
+      .eq("document_id", doc.id)
+      .eq("version_number", doc.current_version)
+      .maybeSingle<{ author_id: string | null; change_summary: string | null }>();
+    pendingChangeSummary = pendingVersion?.change_summary ?? null;
+    if (pendingVersion?.author_id) {
+      const { data: author } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", pendingVersion.author_id)
+        .maybeSingle<{ full_name: string }>();
+      pendingAuthorName = author?.full_name ?? null;
+    }
+  }
 
   return (
     <div>
@@ -160,6 +188,22 @@ export default async function DocumentPage({
       {doc.purpose && (
         <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 print:hidden">
           <span className="font-medium">Purpose:</span> {doc.purpose}
+        </div>
+      )}
+
+      {hasPendingReview && profile?.role === "admin" && (
+        <PendingReviewBanner
+          documentId={doc.id}
+          approvedVersion={doc.approved_version_number!}
+          currentVersion={doc.current_version}
+          pendingAuthorName={pendingAuthorName}
+          pendingChangeSummary={pendingChangeSummary}
+        />
+      )}
+      {hasPendingReview && profile?.role !== "admin" && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 print:hidden">
+          ⏳ Versie v{doc.current_version} is opgeslagen en wacht op admin-goedkeuring.
+          Public ziet nog v{doc.approved_version_number}.
         </div>
       )}
 

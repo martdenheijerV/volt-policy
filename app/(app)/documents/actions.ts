@@ -297,7 +297,20 @@ export async function updateStatus(documentId: string, status: DocStatus) {
   }
 
   const patch: Record<string, unknown> = { status };
-  if (status === "approved") patch.approved_at = new Date().toISOString();
+  if (status === "approved") {
+    patch.approved_at = new Date().toISOString();
+    // The approved snapshot = the current version at the moment of
+    // approval. The library page reads this to render publicly so that
+    // pending editor drafts don't slip out before they're reviewed.
+    const { data: cur } = await supabase
+      .from("documents")
+      .select("current_version")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (cur?.current_version) {
+      patch.approved_version_number = cur.current_version;
+    }
+  }
   const { error } = await supabase
     .from("documents")
     .update(patch)
@@ -308,6 +321,152 @@ export async function updateStatus(documentId: string, status: DocStatus) {
   revalidatePath("/documents");
   revalidatePath("/library");
   return { ok: true as const };
+}
+
+/**
+ * Admin-only. Marks the current `current_version` as the new public-facing
+ * snapshot, replacing whatever was previously approved. Used after an editor
+ * has saved a new version on an already-approved doc — the public library
+ * keeps showing the previous snapshot until this is called.
+ */
+export async function approvePendingChanges(
+  documentId: string
+): Promise<{ ok: true; version: number } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (me?.role !== "admin") {
+    return { ok: false, error: "Only admins can approve pending changes." };
+  }
+
+  const { data: cur } = await supabase
+    .from("documents")
+    .select("current_version,status")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (!cur) return { ok: false, error: "Document not found." };
+
+  const { error } = await supabase
+    .from("documents")
+    .update({
+      approved_version_number: cur.current_version,
+      approved_at: new Date().toISOString(),
+      status: cur.status === "archived" ? "archived" : "approved",
+    })
+    .eq("id", documentId);
+  if (error) return { ok: false, error: error.message };
+
+  await logAudit("document.changes_approved", "document", documentId, {
+    version: cur.current_version,
+  });
+
+  revalidatePath(`/documents/${documentId}`);
+  revalidatePath("/documents");
+  revalidatePath("/library");
+  return { ok: true, version: cur.current_version };
+}
+
+/**
+ * Admin-only. Discards the working draft by reverting `current_content` to
+ * whatever was previously approved. The intermediate versions stay in
+ * `document_versions` for audit; nothing is destroyed, only the head pointer
+ * is moved back. Used when the admin rejects an editor's pending edits.
+ */
+export async function rejectPendingChanges(
+  documentId: string,
+  reason?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (me?.role !== "admin") {
+    return { ok: false, error: "Only admins can reject pending changes." };
+  }
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("approved_version_number,current_version,title")
+    .eq("id", documentId)
+    .maybeSingle<{
+      approved_version_number: number | null;
+      current_version: number;
+      title: string;
+    }>();
+  if (!doc) return { ok: false, error: "Document not found." };
+  if (!doc.approved_version_number) {
+    return {
+      ok: false,
+      error: "No previously-approved version to revert to.",
+    };
+  }
+  if (doc.approved_version_number === doc.current_version) {
+    return { ok: false, error: "There are no pending changes to reject." };
+  }
+
+  const { data: snap } = await supabase
+    .from("document_versions")
+    .select("content,title")
+    .eq("document_id", documentId)
+    .eq("version_number", doc.approved_version_number)
+    .maybeSingle<{ content: string; title: string }>();
+  if (!snap) {
+    return {
+      ok: false,
+      error: `Approved snapshot v${doc.approved_version_number} is missing.`,
+    };
+  }
+
+  // Insert a new version that re-publishes the approved content so the
+  // history stays linear and a future "restore" is easy to spot.
+  const nextVersion = doc.current_version + 1;
+  await supabase.from("document_versions").insert({
+    document_id: documentId,
+    version_number: nextVersion,
+    title: snap.title,
+    content: snap.content,
+    change_summary: `Reverted to v${doc.approved_version_number} (admin rejected pending changes${
+      reason ? `: ${reason}` : ""
+    })`,
+    author_id: user.id,
+  });
+
+  const { error } = await supabase
+    .from("documents")
+    .update({
+      title: snap.title,
+      current_content: snap.content,
+      current_version: nextVersion,
+      approved_version_number: nextVersion,
+      approved_at: new Date().toISOString(),
+    })
+    .eq("id", documentId);
+  if (error) return { ok: false, error: error.message };
+
+  await logAudit("document.changes_rejected", "document", documentId, {
+    rolled_back_to: doc.approved_version_number,
+    reason: reason ?? null,
+  });
+
+  revalidatePath(`/documents/${documentId}`);
+  revalidatePath("/documents");
+  revalidatePath("/library");
+  return { ok: true };
 }
 
 export async function restoreVersion(

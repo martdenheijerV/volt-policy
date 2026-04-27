@@ -18,9 +18,27 @@ export default async function PublicDocumentPage({
     .select("*")
     .eq("slug", slug)
     .eq("status", "approved")
-    .maybeSingle<Document>();
+    .maybeSingle<Document & { approved_version_number?: number | null }>();
 
   if (!doc) notFound();
+
+  // Public sees the LAST APPROVED snapshot, not whatever the latest
+  // editor draft happens to be. If the doc never had an explicit approval
+  // tracked (legacy data) we fall back to current_content.
+  let publicContent = doc.current_content;
+  let publicVersion = doc.current_version;
+  if (doc.approved_version_number && doc.approved_version_number !== doc.current_version) {
+    const { data: snap } = await supabase
+      .from("document_versions")
+      .select("content,version_number")
+      .eq("document_id", doc.id)
+      .eq("version_number", doc.approved_version_number)
+      .maybeSingle<{ content: string; version_number: number }>();
+    if (snap) {
+      publicContent = snap.content;
+      publicVersion = snap.version_number;
+    }
+  }
 
   return (
     <article className="mx-auto max-w-3xl">
@@ -31,8 +49,7 @@ export default async function PublicDocumentPage({
         ← Back to library
       </Link>
       <div className="mt-4 text-xs uppercase tracking-wider text-slate-500">
-        {doc.document_type} · {doc.language.toUpperCase()} · v
-        {doc.current_version}
+        {doc.document_type} · {doc.language.toUpperCase()} · v{publicVersion}
       </div>
       <h1 className="mt-1 text-4xl font-bold">{doc.title}</h1>
       {doc.purpose && (
@@ -55,7 +72,7 @@ export default async function PublicDocumentPage({
       ) : null}
       <div
         className="prose-doc mt-8"
-        dangerouslySetInnerHTML={{ __html: contentToHtml(doc.current_content) }}
+        dangerouslySetInnerHTML={{ __html: contentToHtml(publicContent) }}
       />
     </article>
   );
