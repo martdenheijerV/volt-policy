@@ -190,3 +190,4 @@ Short version:
   `MISTRAL_API_KEY`, `DEEPL_API_KEY`, `LANGUAGETOOL_URL`, `SCIM_TOKEN`.
 - **Email**: Brevo (FR) configured as Authentik's outbound SMTP.
 
+
