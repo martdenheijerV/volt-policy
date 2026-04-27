@@ -189,3 +189,4 @@ Short version:
 - **Env vars**: `DATABASE_URL`, `OIDC_*`, `COOKIE_*` plus optional
   `MISTRAL_API_KEY`, `DEEPL_API_KEY`, `LANGUAGETOOL_URL`, `SCIM_TOKEN`.
 - **Email**: Brevo (FR) configured as Authentik's outbound SMTP.
+
