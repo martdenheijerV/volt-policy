@@ -106,6 +106,17 @@ export default function DocumentWorkspace({
   function handleSave() {
     setError(null);
     setMessage(null);
+    // Mirror the server-side guard so the user gets a clear inline message
+    // instead of Next.js's generic "Server Components render" error page.
+    if (
+      (status === "review" || status === "approved") &&
+      !changeSummary.trim()
+    ) {
+      setError(
+        "Voor documenten in 'review' of 'approved' status is een Change Summary verplicht voor de audit trail."
+      );
+      return;
+    }
     startTransition(async () => {
       try {
         const res = await saveNewVersion(documentId, {
@@ -113,6 +124,10 @@ export default function DocumentWorkspace({
           content: contentHtml,
           change_summary: changeSummary,
         });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         setSavedTitle(title);
         setSavedHtml(contentHtml);
         setChangeSummary("");
@@ -216,13 +231,29 @@ export default function DocumentWorkspace({
                 className="block text-xs font-medium uppercase tracking-wider text-slate-500"
               >
                 Change summary (audit trail)
+                {(status === "review" || status === "approved") && (
+                  <span className="ml-1 text-red-600" aria-label="required">
+                    *
+                  </span>
+                )}
               </label>
               <input
                 id="change-summary"
                 value={changeSummary}
                 onChange={(e) => setChangeSummary(e.target.value)}
-                placeholder="What did you change and why?"
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                required={status === "review" || status === "approved"}
+                aria-required={status === "review" || status === "approved"}
+                placeholder={
+                  status === "review" || status === "approved"
+                    ? "Required: explain what you changed and why"
+                    : "What did you change and why?"
+                }
+                className={`mt-1 w-full rounded border px-3 py-2 text-sm ${
+                  (status === "review" || status === "approved") &&
+                  !changeSummary.trim()
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-300"
+                }`}
               />
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
