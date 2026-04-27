@@ -96,15 +96,14 @@ export default async function DocumentPage({
       !!permission?.can_edit);
   // Three-phase workflow:
   //  - draft (concept): everyone with base edit rights can type. Live collab.
-  //  - review: editors can no longer type — they can still comment + add
-  //    suggestions. Approvers (admin + scoped policy_lead) keep the ability
-  //    to make last-mile tweaks; their saves bump review_version_number so
-  //    the approve picks up exactly what they wrote.
+  //  - review: NOBODY types. Even admin/policy_lead are locked out — they
+  //    only approve or reject. If they need a tweak, they reject → editor
+  //    fixes → re-send to review. Editors can still comment + suggest.
   //  - approved: frozen public snapshot. Editors can still save new versions
   //    on top via the existing pending-review flow.
   const canEdit =
     doc.status === "review"
-      ? canApproveThisDoc
+      ? false
       : doc.status === "archived"
       ? profile?.role === "admin"
       : baseEditable;
@@ -297,7 +296,7 @@ export default async function DocumentPage({
               </strong>{" "}
               {(
                 await tr(
-                  "Editors can still comment + add suggestions, but can't type. You can polish v{n} — your saves update the candidate. Approve when you're happy."
+                  "You're reading the frozen v{n} snapshot. Approve to publish it, or reject to send it back to draft so editors can iterate. Editors can still leave comments + suggestions while you decide."
                 )
               ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
             </>
@@ -308,7 +307,7 @@ export default async function DocumentPage({
               </strong>{" "}
               {(
                 await tr(
-                  "An admin is reviewing v{n}. You can still leave comments and suggestions, but typing is locked until they approve or reject."
+                  "An admin is reviewing v{n}. Typing is locked for everyone until they approve or reject. You can still leave comments and suggestions."
                 )
               ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
             </>
@@ -470,6 +469,7 @@ async function buildWorkspaceLabels(
     statusSetToTpl,
     failedToSave,
     failedToUpdateStatus,
+    remoteStatusTpl,
   ] = await Promise.all([
     tr("Edit"),
     tr("Preview"),
@@ -494,6 +494,7 @@ async function buildWorkspaceLabels(
     tr("Status set to {status}."),
     tr("Failed to save."),
     tr("Failed to update status."),
+    tr("{name} set status to {status}."),
   ]);
   return {
     edit,
@@ -516,6 +517,7 @@ async function buildWorkspaceLabels(
     statusSetToTpl,
     failedToSave,
     failedToUpdateStatus,
+    remoteStatusTpl,
     status: {
       draft: t("doc.statusDraft"),
       review: t("doc.statusReview"),

@@ -98,3 +98,53 @@ body {
 .prose-doc blockquote { border-left: 3px solid #7d3ec0; padding-left: 1rem; color: #555; margin: 1rem 0; }
 .prose-doc code { background: #f5f0fb; padding: .1rem .3rem; border-radius: 3px; }
 .prose-doc pre { background: #f5f0fb; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+
+/*
+ * Realtime collab cursors. Tiptap's CollaborationCursor extension renders
+ * a caret + a name label per remote user. The default styling is heavy —
+ * a 2px-wide bar in solid color is jarring inside flowing prose. Slim the
+ * caret to a 1px line and shrink the label to a small bubble that sits
+ * just above the caret.
+ */
+.collaboration-cursor__caret {
+  /* Border-color is set inline by the extension to the user's avatar
+     color — only override the width/style so the per-user color survives. */
+  border-left-width: 1px;
+  border-left-style: solid;
+  border-right: 0;
+  margin-left: -1px;
+  margin-right: 0;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+  height: 1.1em;
+  vertical-align: text-bottom;
+}
+.collaboration-cursor__label {
+  /* background-color is set inline by the extension to the user's
+     avatar color — keep that, just shape the label as a small pill. */
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 2px 6px;
+  position: absolute;
+  top: -1.1em;
+  left: -1px;
+  user-select: none;
+  white-space: nowrap;
+  pointer-events: none;
+  /* Fade the label after a couple of seconds so it doesn't permanently
+     hover next to the cursor while someone is still in the doc. */
+  animation: cursor-label-fade 6s ease forwards;
+}
+@keyframes cursor-label-fade {
+  0%, 70%   { opacity: 1; }
+  100%      { opacity: 0.25; }
+}
+.ProseMirror:focus-within .collaboration-cursor__label {
+  opacity: 1;
+  animation: none;
+}

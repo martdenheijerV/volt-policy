@@ -29,6 +29,13 @@ import {
 
 export interface RichTextEditorHandle {
   scrollToAnchor: (commentId: string) => void;
+  /**
+   * Broadcast a doc status transition to every other client connected
+   * to this Hocuspocus room. Implemented as a write to a shared Y.Map
+   * called `meta` on the doc's Y.Doc — every connected peer's
+   * observer fires. Returns silently in non-realtime mode.
+   */
+  broadcastStatus: (next: string, byName: string) => void;
 }
 
 interface RealtimeConfig {
@@ -47,6 +54,12 @@ interface Props {
   onCommentRequest: (text: string) => void;
   onAnchorClickInDoc?: (commentId: string) => void;
   realtime?: RealtimeConfig | null;
+  /**
+   * Fired when ANOTHER client broadcasts a status transition through the
+   * shared Y.Map `meta`. The current client's own writes don't fire this —
+   * we rely on the regular Next.js revalidation for the local browser.
+   */
+  onRemoteStatusChange?: (next: string, byName: string) => void;
 }
 
 const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
@@ -60,6 +73,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       onCommentRequest,
       onAnchorClickInDoc,
       realtime,
+      onRemoteStatusChange,
     },
     ref
   ) {
@@ -172,6 +186,30 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       [realtime?.url, realtime?.documentId, providerRef.current]
     );
 
+    // Live status sync: every client connected to this Hocuspocus room
+    // shares a Y.Map called `meta` on the Y.Doc. When one client writes
+    // `statusTransition` (typically the admin clicking Send to review or
+    // Approve / Reject), every other client's observer fires and we
+    // call onRemoteStatusChange so the parent can show a toast and
+    // reload to pick up the new locked / unlocked state.
+    useEffect(() => {
+      if (!realtime || !onRemoteStatusChange) return;
+      const ydoc = ydocRef.current;
+      if (!ydoc) return;
+      const meta = ydoc.getMap("meta");
+      const observer = () => {
+        const t = meta.get("statusTransition") as
+          | { to?: string; byName?: string }
+          | undefined;
+        if (!t || typeof t.to !== "string") return;
+        onRemoteStatusChange(t.to, t.byName ?? "");
+      };
+      meta.observe(observer);
+      return () => {
+        meta.unobserve(observer);
+      };
+    }, [realtime, onRemoteStatusChange]);
+
     // First-time seed: when realtime is on and the Y.Doc is empty after sync,
     // load the saved HTML once so existing docs keep their content.
     //
@@ -245,6 +283,19 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
     useImperativeHandle(
       ref,
       () => ({
+        broadcastStatus(next: string, byName: string) {
+          const ydoc = ydocRef.current;
+          if (!ydoc) return;
+          const meta = ydoc.getMap("meta");
+          // Bundle status + author + a monotonically-increasing tick so
+          // every transition is a fresh value (otherwise observers don't
+          // fire if the same status is set twice in a row).
+          meta.set("statusTransition", {
+            to: next,
+            byName,
+            at: new Date().toISOString(),
+          });
+        },
         scrollToAnchor(commentId: string) {
           if (!editor) return;
           const ps = anchorPluginKey.getState(editor.state) as

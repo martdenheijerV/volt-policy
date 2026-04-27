@@ -219,28 +219,16 @@ export async function saveNewVersion(
     .single();
   if (fetchErr) throw fetchErr;
 
-  // Lock-during-review: while status='review', editors can't save new
-  // versions. The whole point of the review snapshot is that what the
-  // approver sees stays stable until they approve or reject. Admins and
-  // policy_leads with approval rights can still edit (they may need to
-  // make a small fix during review).
+  // Lock-during-review: while status='review' NOBODY can save — not even
+  // admin or policy_lead. The snapshot the approver clicks "Approve" on
+  // must equal what was sent up. If something needs to change, the
+  // approver rejects, editors fix, then it goes back to review.
   if (doc?.status === "review") {
-    const { data: me } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    let canBypassLock = me?.role === "admin";
-    if (!canBypassLock && me?.role === "policy_lead") {
-      canBypassLock = await canApproveDoc(documentId);
-    }
-    if (!canBypassLock) {
-      return {
-        ok: false as const,
-        error:
-          "This document is under review. Editors can't save changes until the admin approves or rejects.",
-      };
-    }
+    return {
+      ok: false as const,
+      error:
+        "This document is under review. Editing is locked until an admin approves or rejects.",
+    };
   }
 
   // Enforce a non-empty change summary on review/approved docs (req. #13).
@@ -272,22 +260,13 @@ export async function saveNewVersion(
     return { ok: false as const, error: insertErr.message };
   }
 
-  // When an approver saves during status='review' (allowed by the lock-
-  // check above), the new version becomes the candidate-under-review.
-  // Otherwise the admin's last-mile tweaks would never make it into the
-  // approved doc.
-  const docPatch: Record<string, unknown> = {
-    title: data.title,
-    current_content: data.content,
-    current_version: nextVersion,
-  };
-  if (doc?.status === "review") {
-    docPatch.review_version_number = nextVersion;
-  }
-
   const { error: updateErr } = await supabase
     .from("documents")
-    .update(docPatch)
+    .update({
+      title: data.title,
+      current_content: data.content,
+      current_version: nextVersion,
+    })
     .eq("id", documentId);
   if (updateErr) {
     return { ok: false as const, error: updateErr.message };

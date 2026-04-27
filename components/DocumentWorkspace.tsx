@@ -2,11 +2,13 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   useTransition,
 } from "react";
+import { useRouter } from "next/navigation";
 import RichTextEditor, { type RichTextEditorHandle } from "./RichTextEditor";
 import CommentsPanel, {
   type CommentsPanelHandle,
@@ -44,6 +46,11 @@ export interface DocumentWorkspaceLabels {
   reject: string;
   archive: string;
   awaitingApproval: string;
+  /**
+   * Template "{name} set status to {status}." — used in the toast that
+   * pops up when another connected user changes the doc status.
+   */
+  remoteStatusTpl: string;
   required: string;
   changeSummaryRequired: string;
   /** Template "Saved as v{n}." — {n} is replaced client-side. */
@@ -115,6 +122,8 @@ export default function DocumentWorkspace({
   const canApprove = canApproveThisDoc;
   const canSendToReview = canSendToReviewThisDoc;
   const canArchive = isAdmin;
+  const router = useRouter();
+  const [remoteToast, setRemoteToast] = useState<string | null>(null);
   const [title, setTitle] = useState(initialTitle);
   const initialHtml = useMemo(() => contentToHtml(initialContent), [initialContent]);
   const [contentHtml, setContentHtml] = useState(initialHtml);
@@ -201,9 +210,9 @@ export default function DocumentWorkspace({
 
   function handleStatus(next: DocStatus) {
     // Sending to review is destructive for collaborators currently typing —
-    // it freezes a snapshot and locks the editor for everyone except
-    // approvers. Confirm before pulling the trigger so a misclick doesn't
-    // kick co-authors out of their flow.
+    // it freezes a snapshot and locks the editor for everyone. Confirm
+    // before pulling the trigger so a misclick doesn't kick co-authors
+    // out of their flow.
     if (next === "review") {
       const ok = window.confirm(labels.confirmSendToReview);
       if (!ok) return;
@@ -220,14 +229,52 @@ export default function DocumentWorkspace({
         setMessage(
           labels.statusSetToTpl.replace("{status}", labels.status[next])
         );
+        // Live broadcast to everyone else in this Hocuspocus room so
+        // their UI flips instantly (lock/unlock + toast). Our own browser
+        // gets refreshed by the regular Next.js revalidation.
+        editorRef.current?.broadcastStatus(next, currentUserName ?? "Someone");
       } catch (e) {
         setError(e instanceof Error ? e.message : labels.failedToUpdateStatus);
       }
     });
   }
 
+  // Receive a remote status transition (someone else clicked Send to review
+  // / Approve / Reject). Show a toast and trigger a router refresh so
+  // canEdit, the banner, and any other status-derived UI re-resolve.
+  const handleRemoteStatusChange = useCallback(
+    (next: string, byName: string) => {
+      const niceStatus =
+        labels.status[(next as DocStatus) ?? "draft"] ?? next;
+      const tpl = labels.remoteStatusTpl ?? "{name} set status to {status}.";
+      setRemoteToast(
+        tpl.replace("{name}", byName || "Someone").replace("{status}", niceStatus)
+      );
+      // Pull the new status + content from the server.
+      router.refresh();
+    },
+    [router, labels.status, labels.remoteStatusTpl]
+  );
+
+  // Auto-dismiss the toast after 6s.
+  useEffect(() => {
+    if (!remoteToast) return;
+    const t = setTimeout(() => setRemoteToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [remoteToast]);
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+    <div>
+      {remoteToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-lg print:hidden"
+        >
+          ⚡ {remoteToast}
+        </div>
+      )}
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <div className="rounded-lg border bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
           <div className="flex items-center gap-2">
@@ -286,6 +333,7 @@ export default function DocumentWorkspace({
             onSelectionText={setSelectedText}
             onCommentRequest={handleCommentRequest}
             onAnchorClickInDoc={handleAnchorClickInDoc}
+            onRemoteStatusChange={handleRemoteStatusChange}
             realtime={
               realtimeUrl && realtimeToken && currentUserId && currentUserName
                 ? {
@@ -447,6 +495,7 @@ export default function DocumentWorkspace({
           language={language}
           labels={aiLabels}
         />
+      </div>
       </div>
     </div>
   );
