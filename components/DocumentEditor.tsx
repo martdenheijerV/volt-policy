@@ -34,6 +34,18 @@ export default function DocumentEditor({
   function handleSave() {
     setError(null);
     setMessage(null);
+    // Match server-side guard: review/approved docs need a change summary
+    // for the audit trail. Bail out on the client so we don't surface
+    // Next.js's generic "Server Components render" error to the user.
+    if (
+      (status === "review" || status === "approved") &&
+      !changeSummary.trim()
+    ) {
+      setError(
+        "Voor documenten in 'review' of 'approved' status is een Change Summary verplicht (audit trail). Vul het veld hieronder in."
+      );
+      return;
+    }
     startTransition(async () => {
       try {
         const res = await saveNewVersion(documentId, {
@@ -136,18 +148,35 @@ export default function DocumentEditor({
                 htmlFor="change-summary"
                 className="mt-4 block text-sm font-medium"
               >
-                Change summary (required motivation for audit trail)
+                Change summary
+                {(status === "review" || status === "approved") && (
+                  <span className="ml-1 text-red-600" aria-label="required">
+                    *
+                  </span>
+                )}
+                <span className="ml-2 text-xs font-normal text-slate-500">
+                  {status === "review" || status === "approved"
+                    ? "required for audit trail on review/approved docs"
+                    : "optional motivation for audit trail"}
+                </span>
               </label>
               <input
                 id="change-summary"
                 value={changeSummary}
                 onChange={(e) => setChangeSummary(e.target.value)}
+                required={status === "review" || status === "approved"}
+                aria-required={status === "review" || status === "approved"}
                 placeholder={
                   suggestionMode
                     ? "Suggested: briefly describe the proposed change"
                     : "What did you change and why?"
                 }
-                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                className={`mt-1 w-full rounded border px-3 py-2 ${
+                  (status === "review" || status === "approved") &&
+                  !changeSummary.trim()
+                    ? "border-red-300 bg-red-50"
+                    : "border-slate-300"
+                }`}
               />
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
