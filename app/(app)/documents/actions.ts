@@ -217,14 +217,19 @@ export async function saveNewVersion(
     .single();
   if (fetchErr) throw fetchErr;
 
-  // Enforce a non-empty change summary on review/approved docs (req. #13)
+  // Enforce a non-empty change summary on review/approved docs (req. #13).
+  // Return a serialisable error rather than throwing — Next.js 15 converts
+  // server-action throws into a generic "Server Components render" error
+  // page which masks the real reason from the user.
   if (
     (doc?.status === "review" || doc?.status === "approved") &&
     !data.change_summary.trim()
   ) {
-    throw new Error(
-      "A change summary is required for documents in review or approved status."
-    );
+    return {
+      ok: false as const,
+      error:
+        "A change summary is required for documents in review or approved status.",
+    };
   }
 
   const nextVersion = (doc?.current_version ?? 0) + 1;
@@ -237,7 +242,9 @@ export async function saveNewVersion(
     change_summary: data.change_summary || null,
     author_id: user.id,
   });
-  if (insertErr) throw insertErr;
+  if (insertErr) {
+    return { ok: false as const, error: insertErr.message };
+  }
 
   const { error: updateErr } = await supabase
     .from("documents")
@@ -247,11 +254,13 @@ export async function saveNewVersion(
       current_version: nextVersion,
     })
     .eq("id", documentId);
-  if (updateErr) throw updateErr;
+  if (updateErr) {
+    return { ok: false as const, error: updateErr.message };
+  }
 
   revalidatePath(`/documents/${documentId}`);
   revalidatePath("/documents");
-  return { ok: true, version: nextVersion };
+  return { ok: true as const, version: nextVersion };
 }
 
 export async function updateStatus(documentId: string, status: DocStatus) {

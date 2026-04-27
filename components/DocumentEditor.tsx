@@ -53,6 +53,10 @@ export default function DocumentEditor({
           content,
           change_summary: changeSummary,
         });
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
         setMessage(`Saved as v${res.version}.`);
         setChangeSummary("");
       } catch (e) {
