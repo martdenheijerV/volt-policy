@@ -5,10 +5,15 @@ import DocumentWorkspace from "@/components/DocumentWorkspace";
 import MetadataPanel from "@/components/MetadataPanel";
 import PendingReviewBanner from "@/components/PendingReviewBanner";
 import { T } from "@/components/T";
-import { getT } from "@/lib/i18n/server";
+import { getT, getTr } from "@/lib/i18n/server";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
 import type { Comment, Document, Profile } from "@/lib/types";
+import type { DocumentWorkspaceLabels } from "@/components/DocumentWorkspace";
+import type { CommentsPanelLabels } from "@/components/CommentsPanel";
+import type { AIPanelLabels } from "@/components/AIPanel";
+import type { MetadataPanelLabels } from "@/components/MetadataPanel";
+import type { PendingReviewBannerLabels } from "@/components/PendingReviewBanner";
 
 export default async function DocumentPage({
   params,
@@ -17,6 +22,7 @@ export default async function DocumentPage({
 }) {
   const { id } = await params;
   const { t } = await getT();
+  const { tr } = await getTr();
   const supabase = await createClient();
 
   const {
@@ -214,7 +220,10 @@ export default async function DocumentPage({
 
       {doc.purpose && (
         <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 print:hidden">
-          <span className="font-medium">Purpose:</span> {doc.purpose}
+          <span className="font-medium">
+            <T>Purpose:</T>
+          </span>{" "}
+          {doc.purpose}
         </div>
       )}
 
@@ -225,23 +234,44 @@ export default async function DocumentPage({
           currentVersion={doc.current_version}
           pendingAuthorName={pendingAuthorName}
           pendingChangeSummary={pendingChangeSummary}
+          labels={await buildPendingReviewLabels(tr)}
         />
       )}
       {hasPendingReview && profile?.role !== "admin" && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 print:hidden">
-          ⏳ Versie v{doc.current_version} is opgeslagen en wacht op admin-goedkeuring.
-          Public ziet nog v{doc.approved_version_number}.
+          ⏳{" "}
+          {(
+            await tr(
+              "Version v{n} has been saved and is awaiting admin approval. The public still sees v{m}."
+            )
+          )
+            .replace("{n}", String(doc.current_version))
+            .replace("{m}", String(doc.approved_version_number))}
         </div>
       )}
 
       {!rendered.isOriginal && (
         <div className="mb-4 rounded-lg border border-volt-200 bg-volt-50 p-3 text-sm text-volt-900 print:hidden">
-          🌐 Auto-vertaald van{" "}
-          <strong>{rendered.sourceLanguage.toUpperCase()}</strong> naar{" "}
-          <strong>{rendered.language.toUpperCase()}</strong> via DeepL
-          {canEdit
-            ? ". Editor ziet de bron — wijzig je taalvoorkeur in de nav om de vertaling te zien."
-            : ". Originele tekst is leidend; vertaling kan kleine afwijkingen hebben."}
+          🌐{" "}
+          {(
+            await tr(
+              "Auto-translated from {src} to {dst} via DeepL."
+            )
+          )
+            .replace("{src}", rendered.sourceLanguage.toUpperCase())
+            .replace("{dst}", rendered.language.toUpperCase())}
+          {" "}
+          {canEdit ? (
+            <T>
+              Editors see the source — change your language preference in the
+              nav to see the translation.
+            </T>
+          ) : (
+            <T>
+              The original text is authoritative; translations may differ
+              slightly.
+            </T>
+          )}
         </div>
       )}
 
@@ -252,6 +282,7 @@ export default async function DocumentPage({
             fields={applicableFields}
             values={metaValuesMap}
             canEdit={canEdit}
+            labels={await buildMetadataLabels(tr)}
           />
         </div>
       )}
@@ -266,8 +297,296 @@ export default async function DocumentPage({
         language={doc.language}
         comments={(comments as Comment[]) ?? []}
         currentUserId={user?.id ?? null}
+        currentUserName={profile?.full_name ?? null}
         userRole={profile?.role ?? null}
+        labels={await buildWorkspaceLabels(tr, t)}
+        commentsLabels={await buildCommentsLabels(tr)}
+        aiLabels={await buildAILabels(tr)}
       />
     </div>
   );
+}
+
+// Pre-translate every UI string the (client) DocumentWorkspace renders.
+// Done here on the server so we can hit the DeepL/dict cache once per
+// page render instead of marking the whole tree as dynamic on the client.
+async function buildWorkspaceLabels(
+  tr: (s: string) => Promise<string>,
+  t: (k: string) => string
+): Promise<DocumentWorkspaceLabels> {
+  const [
+    edit,
+    preview,
+    title,
+    changeSummary,
+    changeSummaryHint,
+    changeSummaryHintRequired,
+    saveNewVersion,
+    saving,
+    sendToReview,
+    approve,
+    archive,
+    awaitingApproval,
+    required,
+    changeSummaryRequired,
+    savedAsVersionTpl,
+    statusSetToTpl,
+    failedToSave,
+    failedToUpdateStatus,
+  ] = await Promise.all([
+    tr("Edit"),
+    tr("Preview"),
+    tr("Title"),
+    tr("Change summary (audit trail)"),
+    tr("What did you change and why?"),
+    tr("Required: explain what you changed and why"),
+    tr("Save new version"),
+    tr("Saving…"),
+    tr("Send to review"),
+    tr("Approve"),
+    tr("Archive"),
+    tr("Awaiting admin approval"),
+    tr("Required"),
+    tr("A change summary is required for documents in review or approved status."),
+    // {n} and {status} are placeholders we substitute client-side.
+    tr("Saved as v{n}."),
+    tr("Status set to {status}."),
+    tr("Failed to save."),
+    tr("Failed to update status."),
+  ]);
+  return {
+    edit,
+    preview,
+    title,
+    changeSummary,
+    changeSummaryHint,
+    changeSummaryHintRequired,
+    saveNewVersion,
+    saving,
+    sendToReview,
+    approve,
+    archive,
+    awaitingApproval,
+    required,
+    changeSummaryRequired,
+    savedAsVersion: (n: number) => savedAsVersionTpl.replace("{n}", String(n)),
+    statusSetTo: (s: string) => statusSetToTpl.replace("{status}", s),
+    failedToSave,
+    failedToUpdateStatus,
+    status: {
+      draft: t("doc.statusDraft"),
+      review: t("doc.statusReview"),
+      approved: t("doc.statusApproved"),
+      archived: t("doc.statusArchived"),
+    },
+  };
+}
+
+async function buildCommentsLabels(
+  tr: (s: string) => Promise<string>
+): Promise<CommentsPanelLabels> {
+  const [
+    comments,
+    signInToComment,
+    replyingToComment,
+    cancelReply,
+    anchoredTo,
+    removeAnchor,
+    selectTextHint,
+    type,
+    commentKind,
+    kindGeneral,
+    kindReview,
+    kindSuggestion,
+    bodyAria,
+    placeholderReply,
+    placeholderAnchored,
+    placeholderGeneral,
+    posting,
+    postReply,
+    postComment,
+    openTpl,
+    resolvedTpl,
+    noOpen,
+    reply,
+    resolve,
+    reopen,
+    clickToJump,
+    unknown,
+    failedToAdd,
+    failedToUpdate,
+  ] = await Promise.all([
+    tr("Comments"),
+    tr("Sign in to leave a comment."),
+    tr("Replying to a comment"),
+    tr("Cancel reply"),
+    tr("Anchored to"),
+    tr("Remove anchor"),
+    tr("Select text in the editor and click 💬 Comment on selection."),
+    tr("Type:"),
+    tr("Comment kind"),
+    tr("General"),
+    tr("Review"),
+    tr("Suggestion"),
+    tr("Comment body"),
+    tr("Type your reply…"),
+    tr("What about this passage?"),
+    tr("Add a general comment…"),
+    tr("Posting…"),
+    tr("Post reply"),
+    tr("Post comment"),
+    tr("Open ({n})"),
+    tr("Resolved ({n})"),
+    tr("No open comments."),
+    tr("Reply"),
+    tr("Resolve"),
+    tr("Reopen"),
+    tr("Click to jump →"),
+    tr("Unknown"),
+    tr("Failed to add comment."),
+    tr("Failed to update."),
+  ]);
+  return {
+    comments,
+    signInToComment,
+    replyingToComment,
+    cancelReply,
+    anchoredTo,
+    removeAnchor,
+    selectTextHint,
+    type,
+    commentKind,
+    kindGeneral,
+    kindReview,
+    kindSuggestion,
+    bodyAria,
+    placeholderReply,
+    placeholderAnchored,
+    placeholderGeneral,
+    posting,
+    postReply,
+    postComment,
+    open: (n: number) => openTpl.replace("{n}", String(n)),
+    resolved: (n: number) => resolvedTpl.replace("{n}", String(n)),
+    noOpen,
+    reply,
+    resolve,
+    reopen,
+    clickToJump,
+    unknown,
+    failedToAdd,
+    failedToUpdate,
+  };
+}
+
+async function buildAILabels(
+  tr: (s: string) => Promise<string>
+): Promise<AIPanelLabels> {
+  const [
+    heading,
+    similarHeading,
+    similarFind,
+    grammarHeading,
+    grammarCheck,
+    cefrHeading,
+    cefrAnalyze,
+    cefrScoreTpl,
+    cefrAvgSentenceTpl,
+    cefrLongWordTpl,
+    failed,
+    ellipsis,
+  ] = await Promise.all([
+    tr("AI assistant"),
+    tr("Similar documents"),
+    tr("Find"),
+    tr("Grammar & spelling"),
+    tr("Check"),
+    tr("Reading level (CEFR)"),
+    tr("Analyze"),
+    tr("(score {n}/100)"),
+    tr("Avg sentence length: {n} words"),
+    tr("Long-word ratio: {n}%"),
+    tr("Failed"),
+    tr("…"),
+  ]);
+  return {
+    heading,
+    similarHeading,
+    similarFind,
+    grammarHeading,
+    grammarCheck,
+    cefrHeading,
+    cefrAnalyze,
+    cefrScore: (n: number) => cefrScoreTpl.replace("{n}", String(n)),
+    cefrAvgSentence: (n: string) => cefrAvgSentenceTpl.replace("{n}", n),
+    cefrLongWord: (n: string) => cefrLongWordTpl.replace("{n}", n),
+    failed,
+    ellipsis,
+  };
+}
+
+async function buildMetadataLabels(
+  tr: (s: string) => Promise<string>
+): Promise<MetadataPanelLabels> {
+  const [metadata, failed] = await Promise.all([
+    tr("Metadata"),
+    tr("Failed"),
+  ]);
+  return { metadata, failed };
+}
+
+async function buildPendingReviewLabels(
+  tr: (s: string) => Promise<string>
+): Promise<PendingReviewBannerLabels> {
+  const [
+    heading,
+    bodyTpl,
+    bodyTplNoAuthor,
+    changeSummary,
+    viewDiffTpl,
+    approve,
+    reject,
+    busy,
+    rejectReasonLabel,
+    rejectReasonPlaceholder,
+    confirmReject,
+    cancel,
+  ] = await Promise.all([
+    tr("Changes pending approval"),
+    tr(
+      "Version v{n} has been saved by {author}. The public still sees v{m}. Approve to publish, or reject to roll back."
+    ),
+    tr(
+      "Version v{n} has been saved. The public still sees v{m}. Approve to publish, or reject to roll back."
+    ),
+    tr("Change summary:"),
+    tr("View diff (v{from} → v{to})"),
+    tr("Approve"),
+    tr("Reject"),
+    tr("Busy…"),
+    tr("Rejection reason (optional — kept in audit log)"),
+    tr("E.g. content not correct, or conflicts with policy X"),
+    tr("Confirm reject (rolls back)"),
+    tr("Cancel"),
+  ]);
+  return {
+    heading,
+    body: ({ currentVersion, approvedVersion, authorName }) => {
+      const tpl = authorName ? bodyTpl : bodyTplNoAuthor;
+      return tpl
+        .replace("{n}", String(currentVersion))
+        .replace("{m}", String(approvedVersion))
+        .replace("{author}", authorName ?? "");
+    },
+    changeSummary,
+    viewDiff: (from: number, to: number) =>
+      viewDiffTpl.replace("{from}", String(from)).replace("{to}", String(to)),
+    approve,
+    reject,
+    busy,
+    rejectReasonLabel,
+    rejectReasonPlaceholder,
+    confirmReject,
+    cancel,
+  };
 }

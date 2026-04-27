@@ -3,24 +3,49 @@
 import { useState } from "react";
 import { htmlToText } from "@/lib/diff";
 
+export interface AIPanelLabels {
+  heading: string;
+  similarHeading: string;
+  similarFind: string;
+  grammarHeading: string;
+  grammarCheck: string;
+  cefrHeading: string;
+  cefrAnalyze: string;
+  cefrScore: (n: number) => string;
+  cefrAvgSentence: (n: string) => string;
+  cefrLongWord: (n: string) => string;
+  failed: string;
+  ellipsis: string;
+}
+
 export default function AIPanel({
   documentId,
   contentHtml,
   language,
+  labels,
 }: {
   documentId: string;
   contentHtml: string;
   language: string;
+  labels: AIPanelLabels;
 }) {
   return (
     <details className="rounded-lg border bg-white p-4 shadow-sm print:hidden">
       <summary className="cursor-pointer text-sm font-semibold">
-        🤖 AI assistant
+        🤖 {labels.heading}
       </summary>
       <div className="mt-4 space-y-6 text-sm">
-        <SimilarDocsSection contentHtml={contentHtml} documentId={documentId} />
-        <GrammarSection contentHtml={contentHtml} language={language} />
-        <CefrSection contentHtml={contentHtml} />
+        <SimilarDocsSection
+          contentHtml={contentHtml}
+          documentId={documentId}
+          labels={labels}
+        />
+        <GrammarSection
+          contentHtml={contentHtml}
+          language={language}
+          labels={labels}
+        />
+        <CefrSection contentHtml={contentHtml} labels={labels} />
       </div>
     </details>
   );
@@ -29,9 +54,11 @@ export default function AIPanel({
 function SimilarDocsSection({
   contentHtml,
   documentId,
+  labels,
 }: {
   contentHtml: string;
   documentId: string;
+  labels: AIPanelLabels;
 }) {
   const [results, setResults] = useState<
     { id: string; title: string; slug: string; document_type: string; status: string }[]
@@ -53,7 +80,7 @@ function SimilarDocsSection({
       if (data.error) throw new Error(data.error);
       setResults(data.documents);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : labels.failed);
     } finally {
       setLoading(false);
     }
@@ -62,13 +89,13 @@ function SimilarDocsSection({
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">Similar documents</h3>
+        <h3 className="font-medium">{labels.similarHeading}</h3>
         <button
           onClick={run}
           disabled={loading}
           className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
         >
-          {loading ? "…" : "Find"}
+          {loading ? labels.ellipsis : labels.similarFind}
         </button>
       </div>
       {error && (
@@ -100,9 +127,11 @@ function SimilarDocsSection({
 function GrammarSection({
   contentHtml,
   language,
+  labels,
 }: {
   contentHtml: string;
   language: string;
+  labels: AIPanelLabels;
 }) {
   const [matches, setMatches] = useState<
     { message: string; shortMessage?: string; replacements?: { value: string }[]; context?: { text: string } }[]
@@ -124,7 +153,7 @@ function GrammarSection({
       if (data.error) throw new Error(data.error);
       setMatches(data.matches);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : labels.failed);
     } finally {
       setLoading(false);
     }
@@ -133,13 +162,13 @@ function GrammarSection({
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">Grammar &amp; spelling</h3>
+        <h3 className="font-medium">{labels.grammarHeading}</h3>
         <button
           onClick={run}
           disabled={loading}
           className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
         >
-          {loading ? "…" : "Check"}
+          {loading ? labels.ellipsis : labels.grammarCheck}
         </button>
       </div>
       {error && (
@@ -164,7 +193,13 @@ function GrammarSection({
   );
 }
 
-function CefrSection({ contentHtml }: { contentHtml: string }) {
+function CefrSection({
+  contentHtml,
+  labels,
+}: {
+  contentHtml: string;
+  labels: AIPanelLabels;
+}) {
   const [result, setResult] = useState<{
     level: string;
     score: number;
@@ -192,26 +227,26 @@ function CefrSection({ contentHtml }: { contentHtml: string }) {
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h3 className="font-medium">Reading level (CEFR)</h3>
+        <h3 className="font-medium">{labels.cefrHeading}</h3>
         <button
           onClick={run}
           disabled={loading}
           className="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
         >
-          {loading ? "…" : "Analyze"}
+          {loading ? labels.ellipsis : labels.cefrAnalyze}
         </button>
       </div>
       {result && (
         <div className="mt-2 rounded bg-slate-50 p-3 text-xs">
           <div>
             <span className="font-medium">{result.level}</span>{" "}
-            <span className="text-slate-500">(score {result.score}/100)</span>
+            <span className="text-slate-500">{labels.cefrScore(result.score)}</span>
           </div>
           <div className="text-slate-600">
-            Avg sentence length: {result.avgSentenceLength.toFixed(1)} words
+            {labels.cefrAvgSentence(result.avgSentenceLength.toFixed(1))}
           </div>
           <div className="text-slate-600">
-            Long-word ratio: {(result.longWordRatio * 100).toFixed(1)}%
+            {labels.cefrLongWord((result.longWordRatio * 100).toFixed(1))}
           </div>
         </div>
       )}

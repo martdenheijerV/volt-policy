@@ -6,6 +6,24 @@ import {
   rejectPendingChanges,
 } from "@/app/(app)/documents/actions";
 
+export interface PendingReviewBannerLabels {
+  heading: string;
+  body: (args: {
+    currentVersion: number;
+    approvedVersion: number;
+    authorName: string | null;
+  }) => string;
+  changeSummary: string;
+  viewDiff: (from: number, to: number) => string;
+  approve: string;
+  reject: string;
+  busy: string;
+  rejectReasonLabel: string;
+  rejectReasonPlaceholder: string;
+  confirmReject: string;
+  cancel: string;
+}
+
 /**
  * Shown on the document page when an editor has saved one or more new
  * versions on top of an already-approved document. The public library
@@ -21,12 +39,14 @@ export default function PendingReviewBanner({
   currentVersion,
   pendingAuthorName,
   pendingChangeSummary,
+  labels,
 }: {
   documentId: string;
   approvedVersion: number;
   currentVersion: number;
   pendingAuthorName?: string | null;
   pendingChangeSummary?: string | null;
+  labels: PendingReviewBannerLabels;
 }) {
   const [pending, startTransition] = useTransition();
   const [reason, setReason] = useState("");
@@ -57,18 +77,17 @@ export default function PendingReviewBanner({
       aria-live="polite"
       className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 print:hidden"
     >
-      <p className="font-medium text-amber-900">
-        ⚠️ Wijzigingen in afwachting van goedkeuring
-      </p>
+      <p className="font-medium text-amber-900">⚠️ {labels.heading}</p>
       <p className="mt-1 text-sm text-amber-900">
-        Versie <strong>v{currentVersion}</strong> is opgeslagen
-        {pendingAuthorName ? ` door ${pendingAuthorName}` : ""}. Public ziet
-        nog steeds <strong>v{approvedVersion}</strong>. Approve om de nieuwe
-        versie publiek te maken, of reject om terug te rollen.
+        {labels.body({
+          currentVersion,
+          approvedVersion,
+          authorName: pendingAuthorName ?? null,
+        })}
       </p>
       {pendingChangeSummary && (
         <p className="mt-2 rounded bg-white/60 px-3 py-2 text-xs text-amber-900">
-          <span className="font-medium">Change summary:</span>{" "}
+          <span className="font-medium">{labels.changeSummary}</span>{" "}
           {pendingChangeSummary}
         </p>
       )}
@@ -84,7 +103,7 @@ export default function PendingReviewBanner({
           href={`/documents/${documentId}/compare?from=${approvedVersion}&to=${currentVersion}`}
           className="rounded border border-amber-600 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
         >
-          Bekijk diff (v{approvedVersion} → v{currentVersion})
+          {labels.viewDiff(approvedVersion, currentVersion)}
         </a>
 
         <button
@@ -93,7 +112,7 @@ export default function PendingReviewBanner({
           disabled={pending}
           className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
         >
-          {pending ? "Bezig…" : "Approve"}
+          {pending ? labels.busy : labels.approve}
         </button>
 
         {!rejectMode && (
@@ -103,7 +122,7 @@ export default function PendingReviewBanner({
             disabled={pending}
             className="rounded border border-red-600 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
-            Reject
+            {labels.reject}
           </button>
         )}
       </div>
@@ -111,14 +130,14 @@ export default function PendingReviewBanner({
       {rejectMode && (
         <div className="mt-3 rounded border border-red-200 bg-white p-3">
           <label className="block text-xs font-medium text-slate-700">
-            Reden voor afwijzing (optioneel — wordt bewaard in audit log)
+            {labels.rejectReasonLabel}
           </label>
           <input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={pending}
             className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Bv. inhoudelijk niet correct, of strijdig met richtlijn X"
+            placeholder={labels.rejectReasonPlaceholder}
           />
           <div className="mt-2 flex gap-2">
             <button
@@ -127,7 +146,7 @@ export default function PendingReviewBanner({
               disabled={pending}
               className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50"
             >
-              {pending ? "Bezig…" : "Bevestig reject (rollt terug)"}
+              {pending ? labels.busy : labels.confirmReject}
             </button>
             <button
               type="button"
@@ -138,7 +157,7 @@ export default function PendingReviewBanner({
               disabled={pending}
               className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
             >
-              Annuleer
+              {labels.cancel}
             </button>
           </div>
         </div>

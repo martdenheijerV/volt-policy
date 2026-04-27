@@ -12,22 +12,29 @@ interface Field {
   required: boolean;
 }
 
+export interface MetadataPanelLabels {
+  metadata: string;
+  failed: string;
+}
+
 export default function MetadataPanel({
   documentId,
   fields,
   values,
   canEdit,
+  labels,
 }: {
   documentId: string;
   fields: Field[];
   values: Record<string, string>;
   canEdit: boolean;
+  labels: MetadataPanelLabels;
 }) {
   if (fields.length === 0) return null;
   return (
     <div className="rounded-lg border bg-white p-4 shadow-sm print:hidden">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-        Metadata
+        {labels.metadata}
       </h2>
       <dl className="mt-3 grid gap-2 text-sm">
         {fields.map((f) => (
@@ -37,6 +44,7 @@ export default function MetadataPanel({
             value={values[f.id] ?? ""}
             documentId={documentId}
             canEdit={canEdit}
+            labels={labels}
           />
         ))}
       </dl>
@@ -49,11 +57,13 @@ function Row({
   value,
   documentId,
   canEdit,
+  labels,
 }: {
   field: Field;
   value: string;
   documentId: string;
   canEdit: boolean;
+  labels: MetadataPanelLabels;
 }) {
   const [v, setV] = useState(value);
   const [pending, start] = useTransition();
@@ -67,7 +77,7 @@ function Row({
         setSaved(true);
         setTimeout(() => setSaved(false), 1500);
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed");
+        alert(e instanceof Error ? e.message : labels.failed);
       }
     });
   }

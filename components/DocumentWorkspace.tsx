@@ -8,8 +8,11 @@ import {
   useTransition,
 } from "react";
 import RichTextEditor, { type RichTextEditorHandle } from "./RichTextEditor";
-import CommentsPanel, { type CommentsPanelHandle } from "./CommentsPanel";
-import AIPanel from "./AIPanel";
+import CommentsPanel, {
+  type CommentsPanelHandle,
+  type CommentsPanelLabels,
+} from "./CommentsPanel";
+import AIPanel, { type AIPanelLabels } from "./AIPanel";
 import { saveNewVersion, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
@@ -23,6 +26,28 @@ function colorFromString(s: string): string {
     "#0891b2", "#2563eb", "#7c3aed", "#db2777", "#0d9488",
   ];
   return palette[Math.abs(h) % palette.length];
+}
+
+export interface DocumentWorkspaceLabels {
+  edit: string;
+  preview: string;
+  title: string;
+  changeSummary: string;
+  changeSummaryHint: string;
+  changeSummaryHintRequired: string;
+  saveNewVersion: string;
+  saving: string;
+  sendToReview: string;
+  approve: string;
+  archive: string;
+  awaitingApproval: string;
+  required: string;
+  changeSummaryRequired: string;
+  savedAsVersion: (n: number) => string;
+  statusSetTo: (statusLabel: string) => string;
+  failedToSave: string;
+  failedToUpdateStatus: string;
+  status: Record<DocStatus, string>;
 }
 
 export default function DocumentWorkspace({
@@ -39,6 +64,9 @@ export default function DocumentWorkspace({
   userRole,
   realtimeUrl,
   realtimeToken,
+  labels,
+  commentsLabels,
+  aiLabels,
 }: {
   documentId: string;
   initialTitle: string;
@@ -53,6 +81,9 @@ export default function DocumentWorkspace({
   userRole: UserRole | null;
   realtimeUrl?: string | null;
   realtimeToken?: string | null;
+  labels: DocumentWorkspaceLabels;
+  commentsLabels: CommentsPanelLabels;
+  aiLabels: AIPanelLabels;
 }) {
   // Role-based capability flags (mirrors server-side guards in actions.ts).
   // - Admin: governance — approve, archive, manage. Can also edit (override).
@@ -123,9 +154,7 @@ export default function DocumentWorkspace({
       (status === "review" || status === "approved") &&
       !changeSummary.trim()
     ) {
-      setError(
-        "Voor documenten in 'review' of 'approved' status is een Change Summary verplicht voor de audit trail."
-      );
+      setError(labels.changeSummaryRequired);
       return;
     }
     startTransition(async () => {
@@ -142,9 +171,9 @@ export default function DocumentWorkspace({
         setSavedTitle(title);
         setSavedHtml(contentHtml);
         setChangeSummary("");
-        setMessage(`Saved as v${res.version}.`);
+        setMessage(labels.savedAsVersion(res.version));
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to save.");
+        setError(e instanceof Error ? e.message : labels.failedToSave);
       }
     });
   }
@@ -159,9 +188,9 @@ export default function DocumentWorkspace({
           setError(res.error);
           return;
         }
-        setMessage(`Status set to ${next}.`);
+        setMessage(labels.statusSetTo(labels.status[next]));
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to update status.");
+        setError(e instanceof Error ? e.message : labels.failedToUpdateStatus);
       }
     });
   }
@@ -181,7 +210,7 @@ export default function DocumentWorkspace({
               }`}
               aria-pressed={view === "edit"}
             >
-              Edit
+              {labels.edit}
             </button>
             <button
               type="button"
@@ -193,7 +222,7 @@ export default function DocumentWorkspace({
               }`}
               aria-pressed={view === "preview"}
             >
-              Preview
+              {labels.preview}
             </button>
           </div>
           <span className="text-sm text-slate-500">v{currentVersion}</span>
@@ -206,7 +235,7 @@ export default function DocumentWorkspace({
               htmlFor="doc-title"
               className="block text-xs font-medium uppercase tracking-wider text-slate-500"
             >
-              Title
+              {labels.title}
             </label>
             <input
               id="doc-title"
@@ -247,9 +276,9 @@ export default function DocumentWorkspace({
                 htmlFor="change-summary"
                 className="block text-xs font-medium uppercase tracking-wider text-slate-500"
               >
-                Change summary (audit trail)
+                {labels.changeSummary}
                 {(status === "review" || status === "approved") && (
-                  <span className="ml-1 text-red-600" aria-label="required">
+                  <span className="ml-1 text-red-600" aria-label={labels.required}>
                     *
                   </span>
                 )}
@@ -262,8 +291,8 @@ export default function DocumentWorkspace({
                 aria-required={status === "review" || status === "approved"}
                 placeholder={
                   status === "review" || status === "approved"
-                    ? "Required: explain what you changed and why"
-                    : "What did you change and why?"
+                    ? labels.changeSummaryHintRequired
+                    : labels.changeSummaryHint
                 }
                 className={`mt-1 w-full rounded border px-3 py-2 text-sm ${
                   (status === "review" || status === "approved") &&
@@ -280,7 +309,7 @@ export default function DocumentWorkspace({
                   disabled={pending || !dirty}
                   className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
                 >
-                  {pending ? "Saving…" : "Save new version"}
+                  {pending ? labels.saving : labels.saveNewVersion}
                 </button>
                 {status !== "review" && status !== "approved" && canSendToReview && (
                   <button
@@ -289,7 +318,7 @@ export default function DocumentWorkspace({
                     disabled={pending}
                     className="rounded border border-amber-600 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50"
                   >
-                    Send to review
+                    {labels.sendToReview}
                   </button>
                 )}
                 {status === "review" && canApprove && (
@@ -299,12 +328,12 @@ export default function DocumentWorkspace({
                     disabled={pending}
                     className="rounded border border-green-700 px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-50"
                   >
-                    Approve
+                    {labels.approve}
                   </button>
                 )}
                 {status === "review" && !canApprove && (
                   <span className="text-xs text-slate-500">
-                    Awaiting admin approval
+                    {labels.awaitingApproval}
                   </span>
                 )}
                 {status !== "archived" && canArchive && (
@@ -314,7 +343,7 @@ export default function DocumentWorkspace({
                     disabled={pending}
                     className="rounded border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
                   >
-                    Archive
+                    {labels.archive}
                   </button>
                 )}
               </div>
@@ -358,11 +387,13 @@ export default function DocumentWorkspace({
           currentUserId={currentUserId}
           activeCommentId={activeCommentId}
           onAnchorClick={handleAnchorClick}
+          labels={commentsLabels}
         />
         <AIPanel
           documentId={documentId}
           contentHtml={contentHtml}
           language={language}
+          labels={aiLabels}
         />
       </div>
     </div>

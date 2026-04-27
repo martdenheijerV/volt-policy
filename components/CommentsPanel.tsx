@@ -17,17 +17,57 @@ export interface CommentsPanelHandle {
   focusComment: (commentId: string) => void;
 }
 
+export interface CommentsPanelLabels {
+  comments: string;
+  signInToComment: string;
+  replyingToComment: string;
+  cancelReply: string;
+  anchoredTo: string;
+  removeAnchor: string;
+  selectTextHint: string;
+  type: string;
+  commentKind: string;
+  kindGeneral: string;
+  kindReview: string;
+  kindSuggestion: string;
+  bodyAria: string;
+  placeholderReply: string;
+  placeholderAnchored: string;
+  placeholderGeneral: string;
+  posting: string;
+  postReply: string;
+  postComment: string;
+  open: (n: number) => string;
+  resolved: (n: number) => string;
+  noOpen: string;
+  reply: string;
+  resolve: string;
+  reopen: string;
+  clickToJump: string;
+  unknown: string;
+  failedToAdd: string;
+  failedToUpdate: string;
+}
+
 interface Props {
   documentId: string;
   comments: Comment[];
   currentUserId: string | null;
   activeCommentId?: string | null;
   onAnchorClick?: (commentId: string) => void;
+  labels: CommentsPanelLabels;
 }
 
 const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
   function CommentsPanel(
-    { documentId, comments, currentUserId, activeCommentId, onAnchorClick },
+    {
+      documentId,
+      comments,
+      currentUserId,
+      activeCommentId,
+      onAnchorClick,
+      labels,
+    },
     ref
   ) {
     const [body, setBody] = useState("");
@@ -77,7 +117,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           setReplyTo(null);
           setKind("general");
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Failed to add comment.");
+          setError(e instanceof Error ? e.message : labels.failedToAdd);
         }
       });
     }
@@ -87,7 +127,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         try {
           await resolveComment(id, !resolved);
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Failed to update.");
+          setError(e instanceof Error ? e.message : labels.failedToUpdate);
         }
       });
     }
@@ -121,19 +161,19 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         ref={wrapperRef}
         className="rounded-lg border bg-white p-4 shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto print:hidden"
       >
-        <h2 className="text-lg font-semibold">Comments</h2>
+        <h2 className="text-lg font-semibold">{labels.comments}</h2>
 
         {currentUserId ? (
           <div className="mt-3 space-y-2">
             {replyTo ? (
               <div className="flex items-start gap-2 rounded border-l-4 border-slate-400 bg-slate-50 p-2 text-xs">
                 <div className="flex-1 italic text-slate-600">
-                  Replying to a comment
+                  {labels.replyingToComment}
                 </div>
                 <button
                   type="button"
                   onClick={() => setReplyTo(null)}
-                  aria-label="Cancel reply"
+                  aria-label={labels.cancelReply}
                   className="hover:underline"
                 >
                   ✕
@@ -143,7 +183,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
               <div className="flex items-start gap-2 rounded border-l-4 border-volt-500 bg-volt-50 p-2 text-xs">
                 <div className="flex-1">
                   <div className="font-medium uppercase tracking-wider text-volt-700">
-                    Anchored to
+                    {labels.anchoredTo}
                   </div>
                   <div className="mt-1 italic text-slate-700">
                     &ldquo;
@@ -154,30 +194,28 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 <button
                   type="button"
                   onClick={() => setAnchor("")}
-                  aria-label="Remove anchor"
+                  aria-label={labels.removeAnchor}
                   className="text-volt-700 hover:underline"
                 >
                   ✕
                 </button>
               </div>
             ) : (
-              <p className="text-xs text-slate-500">
-                Select text in the editor and click 💬 Comment on selection.
-              </p>
+              <p className="text-xs text-slate-500">{labels.selectTextHint}</p>
             )}
 
             <div className="flex items-center gap-2 text-xs">
-              <label className="text-slate-500">Type:</label>
+              <label className="text-slate-500">{labels.type}</label>
               <select
                 value={kind}
                 onChange={(e) => setKind(e.target.value as CommentKind)}
                 disabled={!!replyTo}
                 className="rounded border border-slate-300 px-2 py-1"
-                aria-label="Comment kind"
+                aria-label={labels.commentKind}
               >
-                <option value="general">General</option>
-                <option value="review">Review</option>
-                <option value="suggestion">Suggestion</option>
+                <option value="general">{labels.kindGeneral}</option>
+                <option value="review">{labels.kindReview}</option>
+                <option value="suggestion">{labels.kindSuggestion}</option>
               </select>
             </div>
 
@@ -188,13 +226,13 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
               rows={3}
               placeholder={
                 replyTo
-                  ? "Type your reply…"
+                  ? labels.placeholderReply
                   : anchor
-                  ? "What about this passage?"
-                  : "Add a general comment…"
+                  ? labels.placeholderAnchored
+                  : labels.placeholderGeneral
               }
               className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-              aria-label="Comment body"
+              aria-label={labels.bodyAria}
             />
 
             {error && (
@@ -208,22 +246,24 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
               disabled={pending || !body.trim()}
               className="rounded bg-volt-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
             >
-              {pending ? "Posting…" : replyTo ? "Post reply" : "Post comment"}
+              {pending
+                ? labels.posting
+                : replyTo
+                ? labels.postReply
+                : labels.postComment}
             </button>
           </div>
         ) : (
-          <p className="mt-3 text-sm text-slate-500">
-            Sign in to leave a comment.
-          </p>
+          <p className="mt-3 text-sm text-slate-500">{labels.signInToComment}</p>
         )}
 
         <div className="mt-5">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Open ({open.length})
+            {labels.open(open.length)}
           </h3>
           <ul className="mt-2 space-y-3">
             {open.length === 0 && (
-              <li className="text-sm text-slate-500">No open comments.</li>
+              <li className="text-sm text-slate-500">{labels.noOpen}</li>
             )}
             {open.map((c) => (
               <CommentThread
@@ -235,6 +275,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 isActive={activeCommentId === c.id}
                 onAnchorClick={onAnchorClick}
                 onReply={startReply}
+                labels={labels}
               />
             ))}
           </ul>
@@ -243,7 +284,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         {resolved.length > 0 && (
           <div className="mt-5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Resolved ({resolved.length})
+              {labels.resolved(resolved.length)}
             </h3>
             <ul className="mt-2 space-y-3 opacity-60">
               {resolved.map((c) => (
@@ -256,6 +297,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                   isActive={activeCommentId === c.id}
                   onAnchorClick={onAnchorClick}
                   onReply={startReply}
+                  labels={labels}
                 />
               ))}
             </ul>
@@ -274,6 +316,7 @@ function CommentThread({
   isActive,
   onAnchorClick,
   onReply,
+  labels,
 }: {
   top: Comment;
   replies: Comment[];
@@ -282,6 +325,7 @@ function CommentThread({
   isActive?: boolean;
   onAnchorClick?: (commentId: string) => void;
   onReply: (id: string) => void;
+  labels: CommentsPanelLabels;
 }) {
   const hasAnchor = !!top.anchor_quote;
   const handleJump = () => {
@@ -312,7 +356,7 @@ function CommentThread({
       <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
         <span className="flex items-center gap-2">
           <span className="font-medium text-slate-700">
-            {top.author_name_cached ?? "Unknown"}
+            {top.author_name_cached ?? labels.unknown}
           </span>
           {top.kind && top.kind !== "general" && (
             <span
@@ -322,7 +366,7 @@ function CommentThread({
                   : "bg-blue-100 text-blue-800"
               }`}
             >
-              {top.kind}
+              {top.kind === "review" ? labels.kindReview : labels.kindSuggestion}
             </span>
           )}
         </span>
@@ -346,7 +390,7 @@ function CommentThread({
             <li key={r.id} className="text-sm">
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span className="font-medium text-slate-700">
-                  {r.author_name_cached ?? "Unknown"}
+                  {r.author_name_cached ?? labels.unknown}
                 </span>
                 <span>{formatDate(r.created_at)}</span>
               </div>
@@ -368,12 +412,12 @@ function CommentThread({
             }}
             className="font-medium text-volt-700 hover:underline"
           >
-            Reply
+            {labels.reply}
           </button>
         )}
         {hasAnchor && onAnchorClick && (
           <span className="font-medium text-slate-500">
-            Click to jump →
+            {labels.clickToJump}
           </span>
         )}
         {currentUserId === top.author_id && (
@@ -385,7 +429,7 @@ function CommentThread({
             }}
             className="ml-auto text-xs font-medium text-slate-600 hover:underline"
           >
-            {top.resolved ? "Reopen" : "Resolve"}
+            {top.resolved ? labels.reopen : labels.resolve}
           </button>
         )}
       </div>
