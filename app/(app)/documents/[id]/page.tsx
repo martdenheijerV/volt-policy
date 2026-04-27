@@ -5,6 +5,7 @@ import DocumentWorkspace from "@/components/DocumentWorkspace";
 import MetadataPanel from "@/components/MetadataPanel";
 import PendingReviewBanner from "@/components/PendingReviewBanner";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
+import { getDocInLanguage } from "@/lib/translate";
 import type { Comment, Document, Profile } from "@/lib/types";
 
 export default async function DocumentPage({
@@ -73,6 +74,27 @@ export default async function DocumentPage({
       doc.owner_id === user.id ||
       !!permission?.can_edit);
 
+  // Auto-translate the doc title + content into the user's preferred
+  // language if it differs from the document's source language. Result is
+  // cached in `document_translations` so DeepL is hit only once per
+  // (doc, version, lang). Editors still always edit the source — the
+  // translation is presented as read-only context.
+  const userLang = (profile?.language_pref ?? doc.language).toLowerCase();
+  const rendered = await getDocInLanguage({
+    documentId: doc.id,
+    sourceLanguage: doc.language,
+    sourceTitle: doc.title,
+    sourceContent: doc.current_content,
+    sourceVersion: doc.current_version,
+    targetLanguage: userLang,
+  });
+  // Only when EDITING do we want to keep the original (so the editor isn't
+  // editing a translation in another language). For preview / read-only
+  // we show the translated version. canEdit users see the translation in
+  // a banner with a "view original" link instead.
+  const displayTitle = canEdit ? doc.title : rendered.title;
+  const displayContent = canEdit ? doc.current_content : rendered.content;
+
   // Pending-review state: editor saved a new version on top of an already-
   // approved doc, and the admin hasn't decided yet. Public still sees the
   // previously-approved snapshot.
@@ -122,12 +144,6 @@ export default async function DocumentPage({
             className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
           >
             History
-          </Link>
-          <Link
-            href={`/documents/${doc.id}/translations`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            Translations
           </Link>
           <Link
             href={`/documents/${doc.id}/amendments`}
@@ -207,6 +223,17 @@ export default async function DocumentPage({
         </div>
       )}
 
+      {!rendered.isOriginal && (
+        <div className="mb-4 rounded-lg border border-volt-200 bg-volt-50 p-3 text-sm text-volt-900 print:hidden">
+          🌐 Auto-vertaald van{" "}
+          <strong>{rendered.sourceLanguage.toUpperCase()}</strong> naar{" "}
+          <strong>{rendered.language.toUpperCase()}</strong> via DeepL
+          {canEdit
+            ? ". Editor ziet de bron — wijzig je taalvoorkeur in de nav om de vertaling te zien."
+            : ". Originele tekst is leidend; vertaling kan kleine afwijkingen hebben."}
+        </div>
+      )}
+
       {applicableFields.length > 0 && (
         <div className="mb-4">
           <MetadataPanel
@@ -220,8 +247,8 @@ export default async function DocumentPage({
 
       <DocumentWorkspace
         documentId={doc.id}
-        initialTitle={doc.title}
-        initialContent={doc.current_content}
+        initialTitle={displayTitle}
+        initialContent={displayContent}
         currentVersion={doc.current_version}
         canEdit={canEdit}
         status={doc.status}
