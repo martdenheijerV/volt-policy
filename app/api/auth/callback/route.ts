@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { exchangeCode } from "@/lib/auth/oidc";
 import { signSession } from "@/lib/auth/session";
-import { getCookieConfig } from "@/lib/auth/config";
+import { getCookieConfig, getOidcConfig } from "@/lib/auth/config";
 import { getSql, withUser } from "@/lib/db/sql";
 
 export async function GET(request: Request) {
@@ -81,5 +81,9 @@ export async function GET(request: Request) {
   cookieStore.delete("oidc_verifier");
   cookieStore.delete("oidc_next");
 
-  return NextResponse.redirect(new URL(next, url));
+  // Use the configured redirect URI's origin (the public domain) instead of
+  // request.url, which behind the Traefik proxy resolves to the internal
+  // hostname (0.0.0.0:3000) and breaks the browser redirect.
+  const baseOrigin = new URL(getOidcConfig().redirectUri).origin;
+  return NextResponse.redirect(new URL(next, baseOrigin));
 }
