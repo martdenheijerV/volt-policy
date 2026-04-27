@@ -76,10 +76,10 @@ grant execute on function public.can_approve_doc(uuid) to public;
 --    policy_leads who can approve this doc) may edit. Everyone else is
 --    locked out so the snapshot under review can't drift.
 --
---    We need to recreate the function — Postgres doesn't allow altering
---    a function's body in-place when other policies depend on it. The
---    signature is preserved so dependent policies keep working.
-create or replace function public.doc_editable(d_id uuid)
+--    NB: parameter name MUST stay `p_doc` to match the previous migration.
+--    Postgres rejects parameter renames in `create or replace function`
+--    when other objects (RLS policies) depend on the function signature.
+create or replace function public.doc_editable(p_doc uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   with me as (
     select id, role from public.profiles
@@ -87,7 +87,7 @@ returns boolean language sql stable security definer set search_path = public as
   ),
   doc as (
     select id, owner_id, document_type, status from public.documents
-     where id = d_id
+     where id = p_doc
   )
   select
     case
@@ -95,7 +95,7 @@ returns boolean language sql stable security definer set search_path = public as
       -- can_approve policy_lead). This implements the "editors can't
       -- modify the review candidate" rule.
       when (select status from doc) = 'review' then
-        public.can_approve_doc(d_id)
+        public.can_approve_doc(p_doc)
       -- Status=archived: locked for everyone except admins (they may
       -- restore via a new version).
       when (select status from doc) = 'archived' then
@@ -108,7 +108,7 @@ returns boolean language sql stable security definer set search_path = public as
         or (select owner_id from doc) = (select id from me)
         or exists (
           select 1 from public.document_permissions dp
-           where dp.document_id = d_id
+           where dp.document_id = p_doc
              and dp.user_id = (select id from me)
              and dp.can_edit = true
         )
