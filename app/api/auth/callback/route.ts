@@ -46,15 +46,19 @@ export async function GET(request: Request) {
     );
   }
 
-  // Upsert profile by oidc sub
+  // Upsert profile by oidc sub. Only fall back to the sub on FIRST insert;
+  // never overwrite an existing good `full_name` with the sub when the
+  // OIDC provider didn't return a real name on a re-login.
   const sql = getSql();
-  const fullName = claims.name ?? claims.preferred_username ?? claims.email ?? claims.sub;
+  const realName = claims.name ?? claims.preferred_username ?? claims.email ?? null;
+  const fullName = realName ?? claims.sub;
   const isAdmin = (claims.groups ?? []).includes("volt-policy-admin");
   const result = await withUser(null, async (tx) => {
     return await tx`
       insert into profiles (id, oidc_sub, full_name, role)
       values (gen_random_uuid(), ${claims.sub}, ${fullName}, ${isAdmin ? "admin" : "member"})
-      on conflict (oidc_sub) do update set full_name = excluded.full_name
+      on conflict (oidc_sub) do update
+        set full_name = coalesce(${realName}, profiles.full_name)
       returning id, full_name, role
     `;
   });
