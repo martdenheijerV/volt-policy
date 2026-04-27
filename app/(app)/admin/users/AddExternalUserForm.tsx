@@ -59,8 +59,10 @@ export default function AddExternalUserForm() {
           ✓ Externe gebruiker aangemaakt
         </p>
         <p className="mt-2 text-slate-700">
-          Stuur deze gegevens door (vergeet niet: het wachtwoord wordt maar
-          één keer getoond).
+          Stuur deze gegevens door. Het wachtwoord wordt maar één keer
+          getoond. De ontvanger gaat naar de Login URL en logt direct in op
+          Authentik met de username + tijdelijk wachtwoord (geen "Continue
+          with Volt Auth" knop nodig — die is voor SSO-gebruikers).
         </p>
         <dl className="mt-3 grid gap-2 text-slate-800 sm:grid-cols-[120px_1fr]">
           <dt className="font-medium">Login URL</dt>

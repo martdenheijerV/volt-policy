@@ -126,7 +126,10 @@ export async function createExternalUser(input: {
   const settingsRow = await sql`select 1`.catch(() => null);
   void settingsRow; // touch sql to keep imports honest in case we add lookups later
 
-  const loginUrl = `${new URL(process.env.OIDC_REDIRECT_URI ?? "http://localhost").origin}/login`;
+  // Take them straight into the OIDC redirect — bypasses the "Continue with
+  // Volt Auth" button on /login (which is misleading for external users
+  // who don't actually have Volt SSO).
+  const loginUrl = `${new URL(process.env.OIDC_REDIRECT_URI ?? "http://localhost").origin}/api/auth/login`;
 
   revalidatePath("/admin/users");
   return {
