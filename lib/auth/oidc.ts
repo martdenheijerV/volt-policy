@@ -6,14 +6,13 @@ let _config: openid.Configuration | null = null;
 export async function getOpenIdConfig(): Promise<openid.Configuration> {
   if (_config) return _config;
   const cfg = getOidcConfig();
-  // openid-client v6 defaults to `ClientSecretPost`. Authentik accepts that
-  // for some configurations but rejects it for others — explicitly use
-  // `ClientSecretBasic` (HTTP Basic auth header), which our manual curl
-  // test confirmed works against this Authentik provider.
+  // openid-client v6: pass the secret ONLY through the auth method, not as
+  // 3rd positional arg, otherwise the v6 internals double-wrap and one of
+  // them ends up unset, which Authentik reports as "invalid_client".
   _config = await openid.discovery(
     new URL(cfg.issuerUrl),
     cfg.clientId,
-    cfg.clientSecret,
+    undefined,
     openid.ClientSecretBasic(cfg.clientSecret)
   );
   return _config;
