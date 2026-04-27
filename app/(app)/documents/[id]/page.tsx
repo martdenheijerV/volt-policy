@@ -94,16 +94,28 @@ export default async function DocumentPage({
       profile?.role === "policy_lead" ||
       doc.owner_id === user.id ||
       !!permission?.can_edit);
-  // During 'review' the doc is fully locked for everyone (the "ekstratje"
-  // the user asked for) — even the approver doesn't edit; they approve
-  // or reject. If the admin needs a tweak, they reject → editor fixes
-  // → re-send to review.
+  // Three-phase workflow:
+  //  - draft (concept): everyone with base edit rights can type. Live collab.
+  //  - review: editors can no longer type — they can still comment + add
+  //    suggestions. Approvers (admin + scoped policy_lead) keep the ability
+  //    to make last-mile tweaks; their saves bump review_version_number so
+  //    the approve picks up exactly what they wrote.
+  //  - approved: frozen public snapshot. Editors can still save new versions
+  //    on top via the existing pending-review flow.
   const canEdit =
     doc.status === "review"
-      ? false
+      ? canApproveThisDoc
       : doc.status === "archived"
       ? profile?.role === "admin"
       : baseEditable;
+
+  // Who can move the doc into review? Per the user's design (model B):
+  // admin always, the document owner (so a single editor can publish their
+  // own work), and policy_leads who can approve this specific doc. Plain
+  // editors collaborate but don't lock the workflow.
+  const isOwner = !!user && doc.owner_id === user.id;
+  const canSendToReviewThisDoc =
+    profile?.role === "admin" || isOwner || canApproveThisDoc;
 
   // While status='review', everyone sees the frozen review snapshot
   // (the version that was sent up for approval), NOT the live working
@@ -285,7 +297,7 @@ export default async function DocumentPage({
               </strong>{" "}
               {(
                 await tr(
-                  "Editors are locked out until you approve or reject. You're reading the frozen v{n} snapshot — what you approve is exactly this."
+                  "Editors can still comment + add suggestions, but can't type. You can polish v{n} — your saves update the candidate. Approve when you're happy."
                 )
               ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
             </>
@@ -296,9 +308,27 @@ export default async function DocumentPage({
               </strong>{" "}
               {(
                 await tr(
-                  "An admin is reviewing v{n}. Editing is locked for everyone until they approve or reject."
+                  "An admin is reviewing v{n}. You can still leave comments and suggestions, but typing is locked until they approve or reject."
                 )
               ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
+            </>
+          )}
+          {/*
+            Diff link: compare the snapshot under review against the
+            previously-approved version (or v1 for first-time approvals)
+            so the reviewer immediately sees what changed.
+          */}
+          {doc.review_version_number && doc.review_version_number > 1 && (
+            <>
+              {" "}
+              <Link
+                href={`/documents/${doc.id}/compare?from=${
+                  doc.approved_version_number ?? doc.review_version_number - 1
+                }&to=${doc.review_version_number}`}
+                className="font-medium underline hover:no-underline"
+              >
+                <T>View diff →</T>
+              </Link>
             </>
           )}
         </div>
@@ -379,6 +409,7 @@ export default async function DocumentPage({
         realtimeUrl={await getRealtimeUrl()}
         realtimeToken={await getRealtimeToken(user?.id ?? null, doc.id)}
         canApproveThisDoc={canApproveThisDoc}
+        canSendToReviewThisDoc={canSendToReviewThisDoc}
         labels={await buildWorkspaceLabels(tr, t)}
         commentsLabels={await buildCommentsLabels(tr)}
         aiLabels={await buildAILabels(tr)}
@@ -428,6 +459,7 @@ async function buildWorkspaceLabels(
     saveNewVersion,
     saving,
     sendToReview,
+    confirmSendToReview,
     approve,
     reject,
     archive,
@@ -448,6 +480,9 @@ async function buildWorkspaceLabels(
     tr("Save new version"),
     tr("Saving…"),
     tr("Send to review"),
+    tr(
+      "Send this document to review? Co-editors will be locked out until an admin approves or rejects. Continue?"
+    ),
     tr("Approve"),
     tr("Reject"),
     tr("Archive"),
@@ -470,6 +505,7 @@ async function buildWorkspaceLabels(
     saveNewVersion,
     saving,
     sendToReview,
+    confirmSendToReview,
     approve,
     reject,
     archive,

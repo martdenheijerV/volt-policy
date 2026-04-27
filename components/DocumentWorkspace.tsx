@@ -38,6 +38,8 @@ export interface DocumentWorkspaceLabels {
   saveNewVersion: string;
   saving: string;
   sendToReview: string;
+  /** Confirmation prompt shown before flipping a doc to status='review'. */
+  confirmSendToReview: string;
   approve: string;
   reject: string;
   archive: string;
@@ -68,6 +70,7 @@ export default function DocumentWorkspace({
   realtimeUrl,
   realtimeToken,
   canApproveThisDoc,
+  canSendToReviewThisDoc,
   labels,
   commentsLabels,
   aiLabels,
@@ -91,6 +94,12 @@ export default function DocumentWorkspace({
    * has can_approve=true matching this doc's type/status.
    */
   canApproveThisDoc: boolean;
+  /**
+   * True if the current user is allowed to flip this doc to status='review'.
+   * Equivalent to "owner of the workflow" — admin, doc owner, or scoped
+   * policy_lead. Plain co-editors can edit but not lock.
+   */
+  canSendToReviewThisDoc: boolean;
   labels: DocumentWorkspaceLabels;
   commentsLabels: CommentsPanelLabels;
   aiLabels: AIPanelLabels;
@@ -103,10 +112,8 @@ export default function DocumentWorkspace({
   //   resolved that into `canApproveThisDoc`.
   // - Member/Translator: read + comment + propose amendments only.
   const isAdmin = userRole === "admin";
-  const isEditor = userRole === "editor";
-  const isPolicyLead = userRole === "policy_lead";
   const canApprove = canApproveThisDoc;
-  const canSendToReview = isAdmin || isEditor || isPolicyLead;
+  const canSendToReview = canSendToReviewThisDoc;
   const canArchive = isAdmin;
   const [title, setTitle] = useState(initialTitle);
   const initialHtml = useMemo(() => contentToHtml(initialContent), [initialContent]);
@@ -193,6 +200,14 @@ export default function DocumentWorkspace({
   }
 
   function handleStatus(next: DocStatus) {
+    // Sending to review is destructive for collaborators currently typing —
+    // it freezes a snapshot and locks the editor for everyone except
+    // approvers. Confirm before pulling the trigger so a misclick doesn't
+    // kick co-authors out of their flow.
+    if (next === "review") {
+      const ok = window.confirm(labels.confirmSendToReview);
+      if (!ok) return;
+    }
     setError(null);
     setMessage(null);
     startTransition(async () => {

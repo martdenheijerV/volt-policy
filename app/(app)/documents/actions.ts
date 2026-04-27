@@ -272,13 +272,22 @@ export async function saveNewVersion(
     return { ok: false as const, error: insertErr.message };
   }
 
+  // When an approver saves during status='review' (allowed by the lock-
+  // check above), the new version becomes the candidate-under-review.
+  // Otherwise the admin's last-mile tweaks would never make it into the
+  // approved doc.
+  const docPatch: Record<string, unknown> = {
+    title: data.title,
+    current_content: data.content,
+    current_version: nextVersion,
+  };
+  if (doc?.status === "review") {
+    docPatch.review_version_number = nextVersion;
+  }
+
   const { error: updateErr } = await supabase
     .from("documents")
-    .update({
-      title: data.title,
-      current_content: data.content,
-      current_version: nextVersion,
-    })
+    .update(docPatch)
     .eq("id", documentId);
   if (updateErr) {
     return { ok: false as const, error: updateErr.message };
