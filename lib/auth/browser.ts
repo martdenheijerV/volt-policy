@@ -1,9 +1,7 @@
 "use client";
 
 /**
- * Browser-side auth helpers. Replace the old `lib/supabase/client` createClient
- * usage that browser components relied on for `supabase.auth.getUser()` and
- * `supabase.auth.signOut()`.
+ * Browser-side auth helpers.
  *
  * Sessions live in an httpOnly JWT cookie (set by /api/auth/callback) so the
  * browser cannot read or forge them — it asks /api/auth/me which trusts the

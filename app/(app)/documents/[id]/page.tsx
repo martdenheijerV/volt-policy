@@ -8,6 +8,7 @@ import { T } from "@/components/T";
 import { getT, getTr } from "@/lib/i18n/server";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
+import { createRealtimeToken } from "@/lib/realtime/token";
 import type { Comment, Document, Profile } from "@/lib/types";
 import type { DocumentWorkspaceLabels } from "@/components/DocumentWorkspace";
 import type { CommentsPanelLabels } from "@/components/CommentsPanel";
@@ -299,12 +300,38 @@ export default async function DocumentPage({
         currentUserId={user?.id ?? null}
         currentUserName={profile?.full_name ?? null}
         userRole={profile?.role ?? null}
+        realtimeUrl={await getRealtimeUrl()}
+        realtimeToken={await getRealtimeToken(user?.id ?? null, doc.id)}
         labels={await buildWorkspaceLabels(tr, t)}
         commentsLabels={await buildCommentsLabels(tr)}
         aiLabels={await buildAILabels(tr)}
       />
     </div>
   );
+}
+
+/**
+ * Public Hocuspocus URL the browser will open a websocket to.
+ * Returns null when realtime is intentionally disabled (e.g. local dev
+ * without the realtime container, or when env vars aren't set yet).
+ */
+async function getRealtimeUrl(): Promise<string | null> {
+  return process.env.NEXT_PUBLIC_HOCUSPOCUS_URL ?? null;
+}
+
+/**
+ * Mint a per-(user, document) JWT for the realtime collab session. The
+ * token is sent to the browser, so we never ship the master HOCUS_SECRET.
+ * Returns null when realtime is disabled or the user is anonymous.
+ */
+async function getRealtimeToken(
+  userId: string | null,
+  documentId: string
+): Promise<string | null> {
+  if (!userId) return null;
+  if (!process.env.HOCUS_SECRET) return null;
+  if (!process.env.NEXT_PUBLIC_HOCUSPOCUS_URL) return null;
+  return await createRealtimeToken(userId, documentId);
 }
 
 // Pre-translate every UI string the (client) DocumentWorkspace renders.
