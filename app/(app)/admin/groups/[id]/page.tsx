@@ -61,7 +61,7 @@ export default async function GroupDetailPage({
 
   const { data: permissions } = await supabase
     .from("group_doc_permissions")
-    .select("id,document_type,status,can_read,can_edit,can_comment")
+    .select("id,document_type,status,can_read,can_edit,can_comment,can_approve")
     .eq("group_id", id)
     .order("created_at");
 
@@ -77,6 +77,7 @@ export default async function GroupDetailPage({
     readCol,
     commentCol,
     editCol,
+    approveCol,
     typeCol,
     statusCol,
     unknown,
@@ -100,6 +101,7 @@ export default async function GroupDetailPage({
     tr("Read"),
     tr("Comment"),
     tr("Edit"),
+    tr("Approve"),
     tr("Type"),
     tr("Status"),
     tr("Unknown"),
@@ -210,6 +212,9 @@ export default async function GroupDetailPage({
         <label className="flex items-center gap-1 text-sm">
           <input type="checkbox" name="can_edit" /> {editCol}
         </label>
+        <label className="flex items-center gap-1 text-sm" title="Allows policy_lead members to approve docs matching this rule">
+          <input type="checkbox" name="can_approve" /> {approveCol}
+        </label>
         <button type="submit" className="rounded bg-volt-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-volt-700">
           {addRule}
         </button>
@@ -224,6 +229,7 @@ export default async function GroupDetailPage({
               <th className="px-4 py-2">{readCol}</th>
               <th className="px-4 py-2">{commentCol}</th>
               <th className="px-4 py-2">{editCol}</th>
+              <th className="px-4 py-2">{approveCol}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -235,6 +241,7 @@ export default async function GroupDetailPage({
                 <td className="px-4 py-2">{r.can_read ? "✓" : ""}</td>
                 <td className="px-4 py-2">{r.can_comment ? "✓" : ""}</td>
                 <td className="px-4 py-2">{r.can_edit ? "✓" : ""}</td>
+                <td className="px-4 py-2">{r.can_approve ? "✓" : ""}</td>
                 <td className="px-4 py-2 text-right">
                   <form action={async () => { "use server"; await deleteGroupPermission(r.id, group.id); }}>
                     <button className="text-xs text-red-700 hover:underline">{remove}</button>
@@ -244,7 +251,7 @@ export default async function GroupDetailPage({
             ))}
             {(permissions ?? []).length === 0 && (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-sm text-slate-500">
+                <td colSpan={7} className="p-4 text-center text-sm text-slate-500">
                   {noRules}
                 </td>
               </tr>

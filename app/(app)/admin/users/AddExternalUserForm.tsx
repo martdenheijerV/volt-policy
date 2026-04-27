@@ -23,6 +23,7 @@ export interface AddExternalUserFormLabels {
   role: string;
   roleMember: string;
   roleEditor: string;
+  rolePolicyLead: string;
   roleTranslator: string;
   roleAdmin: string;
   creating: string;
@@ -187,6 +188,7 @@ export default function AddExternalUserForm({
           >
             <option value="member">{labels.roleMember}</option>
             <option value="editor">{labels.roleEditor}</option>
+            <option value="policy_lead">{labels.rolePolicyLead}</option>
             <option value="translator">{labels.roleTranslator}</option>
             <option value="admin">{labels.roleAdmin}</option>
           </select>

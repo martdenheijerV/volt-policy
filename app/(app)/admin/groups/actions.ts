@@ -73,6 +73,7 @@ export async function addGroupPermission(formData: FormData) {
   const can_read = formData.get("can_read") === "on";
   const can_edit = formData.get("can_edit") === "on";
   const can_comment = formData.get("can_comment") === "on";
+  const can_approve = formData.get("can_approve") === "on";
   const { error } = await supabase.from("group_doc_permissions").insert({
     group_id,
     document_type: document_type || null,
@@ -80,6 +81,7 @@ export async function addGroupPermission(formData: FormData) {
     can_read,
     can_edit,
     can_comment,
+    can_approve,
   });
   if (error) throw error;
   revalidatePath(`/admin/groups/${group_id}`);

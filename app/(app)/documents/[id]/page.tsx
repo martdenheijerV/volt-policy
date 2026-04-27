@@ -9,6 +9,7 @@ import { getT, getTr } from "@/lib/i18n/server";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
 import { createRealtimeToken } from "@/lib/realtime/token";
+import { canApproveDoc } from "@/lib/db/approval";
 import type { Comment, Document, Profile } from "@/lib/types";
 import type { DocumentWorkspaceLabels } from "@/components/DocumentWorkspace";
 import type { CommentsPanelLabels } from "@/components/CommentsPanel";
@@ -77,12 +78,55 @@ export default async function DocumentPage({
   const metaValuesMap: Record<string, string> = {};
   for (const r of metaValues ?? []) metaValuesMap[r.field_id] = r.value ?? "";
 
-  const canEdit =
+  // Lock-during-review: while a doc is in 'review' status only approvers
+  // (admin or scoped policy_lead) may continue editing. Everyone else sees
+  // the frozen review snapshot read-only until the admin decides. This is
+  // the "ekstratje" the user asked for — clean approval semantics.
+  let canApproveThisDoc = profile?.role === "admin";
+  if (!canApproveThisDoc && profile?.role === "policy_lead" && user) {
+    canApproveThisDoc = await canApproveDoc(doc.id);
+  }
+
+  const baseEditable =
     !!user &&
     (profile?.role === "admin" ||
       profile?.role === "editor" ||
+      profile?.role === "policy_lead" ||
       doc.owner_id === user.id ||
       !!permission?.can_edit);
+  // During 'review' the doc is fully locked for everyone (the "ekstratje"
+  // the user asked for) — even the approver doesn't edit; they approve
+  // or reject. If the admin needs a tweak, they reject → editor fixes
+  // → re-send to review.
+  const canEdit =
+    doc.status === "review"
+      ? false
+      : doc.status === "archived"
+      ? profile?.role === "admin"
+      : baseEditable;
+
+  // While status='review', everyone sees the frozen review snapshot
+  // (the version that was sent up for approval), NOT the live working
+  // copy. This guarantees that what the admin clicks "Approve" on is
+  // exactly what they're reading. We fetch the snapshot from
+  // document_versions; if it's missing for some reason we fall back to
+  // current_content.
+  let reviewTitle: string | null = null;
+  let reviewContent: string | null = null;
+  if (doc.status === "review" && doc.review_version_number) {
+    const { data: snap } = await supabase
+      .from("document_versions")
+      .select("title,content")
+      .eq("document_id", doc.id)
+      .eq("version_number", doc.review_version_number)
+      .maybeSingle<{ title: string; content: string }>();
+    if (snap) {
+      reviewTitle = snap.title;
+      reviewContent = snap.content;
+    }
+  }
+  const baseTitle = reviewTitle ?? doc.title;
+  const baseContent = reviewContent ?? doc.current_content;
 
   // Auto-translate the doc title + content into the user's preferred
   // language if it differs from the document's source language. Result is
@@ -93,17 +137,17 @@ export default async function DocumentPage({
   const rendered = await getDocInLanguage({
     documentId: doc.id,
     sourceLanguage: doc.language,
-    sourceTitle: doc.title,
-    sourceContent: doc.current_content,
-    sourceVersion: doc.current_version,
+    sourceTitle: baseTitle,
+    sourceContent: baseContent,
+    sourceVersion: doc.review_version_number ?? doc.current_version,
     targetLanguage: userLang,
   });
   // Only when EDITING do we want to keep the original (so the editor isn't
   // editing a translation in another language). For preview / read-only
   // we show the translated version. canEdit users see the translation in
   // a banner with a "view original" link instead.
-  const displayTitle = canEdit ? doc.title : rendered.title;
-  const displayContent = canEdit ? doc.current_content : rendered.content;
+  const displayTitle = canEdit ? baseTitle : rendered.title;
+  const displayContent = canEdit ? baseContent : rendered.content;
 
   // Pending-review state: editor saved a new version on top of an already-
   // approved doc, and the admin hasn't decided yet. Public still sees the
@@ -228,6 +272,38 @@ export default async function DocumentPage({
         </div>
       )}
 
+      {doc.status === "review" && (
+        <div
+          className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 print:hidden"
+          role="status"
+        >
+          🔒{" "}
+          {canApproveThisDoc ? (
+            <>
+              <strong>
+                <T>Awaiting your approval.</T>
+              </strong>{" "}
+              {(
+                await tr(
+                  "Editors are locked out until you approve or reject. You're reading the frozen v{n} snapshot — what you approve is exactly this."
+                )
+              ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
+            </>
+          ) : (
+            <>
+              <strong>
+                <T>Under review.</T>
+              </strong>{" "}
+              {(
+                await tr(
+                  "An admin is reviewing v{n}. Editing is locked for everyone until they approve or reject."
+                )
+              ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
+            </>
+          )}
+        </div>
+      )}
+
       {hasPendingReview && profile?.role === "admin" && (
         <PendingReviewBanner
           documentId={doc.id}
@@ -302,6 +378,7 @@ export default async function DocumentPage({
         userRole={profile?.role ?? null}
         realtimeUrl={await getRealtimeUrl()}
         realtimeToken={await getRealtimeToken(user?.id ?? null, doc.id)}
+        canApproveThisDoc={canApproveThisDoc}
         labels={await buildWorkspaceLabels(tr, t)}
         commentsLabels={await buildCommentsLabels(tr)}
         aiLabels={await buildAILabels(tr)}
@@ -352,6 +429,7 @@ async function buildWorkspaceLabels(
     saving,
     sendToReview,
     approve,
+    reject,
     archive,
     awaitingApproval,
     required,
@@ -371,6 +449,7 @@ async function buildWorkspaceLabels(
     tr("Saving…"),
     tr("Send to review"),
     tr("Approve"),
+    tr("Reject"),
     tr("Archive"),
     tr("Awaiting admin approval"),
     tr("Required"),
@@ -392,6 +471,7 @@ async function buildWorkspaceLabels(
     saving,
     sendToReview,
     approve,
+    reject,
     archive,
     awaitingApproval,
     required,

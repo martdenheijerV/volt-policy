@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/client";
+import { canApproveDoc } from "@/lib/db/approval";
 import { slugify } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
 import { notifyAdminsOfPendingReview } from "@/lib/email";
@@ -218,6 +219,30 @@ export async function saveNewVersion(
     .single();
   if (fetchErr) throw fetchErr;
 
+  // Lock-during-review: while status='review', editors can't save new
+  // versions. The whole point of the review snapshot is that what the
+  // approver sees stays stable until they approve or reject. Admins and
+  // policy_leads with approval rights can still edit (they may need to
+  // make a small fix during review).
+  if (doc?.status === "review") {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    let canBypassLock = me?.role === "admin";
+    if (!canBypassLock && me?.role === "policy_lead") {
+      canBypassLock = await canApproveDoc(documentId);
+    }
+    if (!canBypassLock) {
+      return {
+        ok: false as const,
+        error:
+          "This document is under review. Editors can't save changes until the admin approves or rejects.",
+      };
+    }
+  }
+
   // Enforce a non-empty change summary on review/approved docs (req. #13).
   // Return a serialisable error rather than throwing — Next.js 15 converts
   // server-action throws into a generic "Server Components render" error
@@ -326,41 +351,87 @@ export async function updateStatus(documentId: string, status: DocStatus) {
     .eq("id", user.id)
     .maybeSingle();
 
+  // Approval check: admin always; otherwise we ask the SQL helper
+  // which understands the policy_lead + group permission scoping.
+  let canApproveThisDoc = me?.role === "admin";
+  if (!canApproveThisDoc && me?.role === "policy_lead") {
+    canApproveThisDoc = await canApproveDoc(documentId);
+  }
+
   // Workflow gates (defense in depth — UI also hides the buttons):
-  // - Editors and admins can move docs to `draft` or `review`.
-  // - Only admins can `approve` or `archive`.
-  if (status === "approved" || status === "archived") {
+  // - Editors / admins / policy_leads can send docs to review.
+  // - Only admins can archive.
+  // - approve requires canApproveThisDoc (admin or scoped policy_lead).
+  if (status === "approved") {
+    if (!canApproveThisDoc) {
+      return {
+        ok: false as const,
+        error: "You don't have approval rights on this document.",
+      };
+    }
+  } else if (status === "archived") {
     if (me?.role !== "admin") {
       return {
         ok: false as const,
-        error:
-          status === "approved"
-            ? "Only admins can approve documents."
-            : "Only admins can archive documents.",
+        error: "Only admins can archive documents.",
       };
     }
-  } else if (me?.role !== "admin" && me?.role !== "editor") {
+  } else if (
+    me?.role !== "admin" &&
+    me?.role !== "editor" &&
+    me?.role !== "policy_lead"
+  ) {
     return {
       ok: false as const,
-      error: "Only editors or admins can change document status.",
+      error: "Only editors, policy leads or admins can change document status.",
     };
   }
 
   const patch: Record<string, unknown> = { status };
-  if (status === "approved") {
-    patch.approved_at = new Date().toISOString();
-    // The approved snapshot = the current version at the moment of
-    // approval. The library page reads this to render publicly so that
-    // pending editor drafts don't slip out before they're reviewed.
+
+  if (status === "review") {
+    // Freeze a snapshot at "send to review" time. Editors are locked
+    // out of the doc while status='review', so what the reviewer sees
+    // is exactly what gets approved or rejected.
     const { data: cur } = await supabase
       .from("documents")
       .select("current_version")
       .eq("id", documentId)
       .maybeSingle();
-    if (cur?.current_version) {
-      patch.approved_version_number = cur.current_version;
+    if (!cur?.current_version) {
+      return {
+        ok: false as const,
+        error: "Save the document at least once before sending it to review.",
+      };
     }
+    patch.review_version_number = cur.current_version;
   }
+
+  if (status === "approved") {
+    patch.approved_at = new Date().toISOString();
+    // The approved snapshot = the version that was sent for review.
+    // Falls back to current_version only for legacy data where
+    // review_version_number was never set.
+    const { data: cur } = await supabase
+      .from("documents")
+      .select("current_version,review_version_number")
+      .eq("id", documentId)
+      .maybeSingle();
+    const approveVersion =
+      cur?.review_version_number ?? cur?.current_version ?? null;
+    if (approveVersion) {
+      patch.approved_version_number = approveVersion;
+    }
+    // Clear the review pointer — review is over.
+    patch.review_version_number = null;
+  }
+
+  if (status === "draft") {
+    // Going back to draft (e.g. after a reject) clears the pending
+    // review snapshot so editors can iterate freely again.
+    patch.review_version_number = null;
+  }
+
   const { error } = await supabase
     .from("documents")
     .update(patch)
@@ -393,8 +464,15 @@ export async function approvePendingChanges(
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
-  if (me?.role !== "admin") {
-    return { ok: false, error: "Only admins can approve pending changes." };
+  let canApproveThisDoc = me?.role === "admin";
+  if (!canApproveThisDoc && me?.role === "policy_lead") {
+    canApproveThisDoc = await canApproveDoc(documentId);
+  }
+  if (!canApproveThisDoc) {
+    return {
+      ok: false,
+      error: "You don't have approval rights on this document.",
+    };
   }
 
   const { data: cur } = await supabase
@@ -445,8 +523,15 @@ export async function rejectPendingChanges(
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
-  if (me?.role !== "admin") {
-    return { ok: false, error: "Only admins can reject pending changes." };
+  let canRejectThisDoc = me?.role === "admin";
+  if (!canRejectThisDoc && me?.role === "policy_lead") {
+    canRejectThisDoc = await canApproveDoc(documentId);
+  }
+  if (!canRejectThisDoc) {
+    return {
+      ok: false,
+      error: "You don't have approval rights on this document.",
+    };
   }
 
   const { data: doc } = await supabase

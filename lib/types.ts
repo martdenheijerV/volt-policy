@@ -1,4 +1,9 @@
-export type UserRole = "admin" | "editor" | "member" | "translator";
+export type UserRole =
+  | "admin"
+  | "editor"
+  | "policy_lead"
+  | "member"
+  | "translator";
 export type DocStatus = "draft" | "review" | "approved" | "archived";
 export type DocType =
   | "policy"
@@ -30,6 +35,10 @@ export interface Document {
   owner_id: string | null;
   current_content: string;
   current_version: number;
+  /** Snapshot pointer: which version is the public-facing approved one. */
+  approved_version_number: number | null;
+  /** Snapshot pointer: while status='review', the version the admin reviews. */
+  review_version_number: number | null;
   created_at: string;
   updated_at: string;
   approved_at: string | null;

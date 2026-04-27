@@ -39,6 +39,7 @@ export interface DocumentWorkspaceLabels {
   saving: string;
   sendToReview: string;
   approve: string;
+  reject: string;
   archive: string;
   awaitingApproval: string;
   required: string;
@@ -66,6 +67,7 @@ export default function DocumentWorkspace({
   userRole,
   realtimeUrl,
   realtimeToken,
+  canApproveThisDoc,
   labels,
   commentsLabels,
   aiLabels,
@@ -83,18 +85,28 @@ export default function DocumentWorkspace({
   userRole: UserRole | null;
   realtimeUrl?: string | null;
   realtimeToken?: string | null;
+  /**
+   * True if the current user can approve THIS document. Server-side
+   * resolution: admin always; policy_lead only if a group they're in
+   * has can_approve=true matching this doc's type/status.
+   */
+  canApproveThisDoc: boolean;
   labels: DocumentWorkspaceLabels;
   commentsLabels: CommentsPanelLabels;
   aiLabels: AIPanelLabels;
 }) {
   // Role-based capability flags (mirrors server-side guards in actions.ts).
-  // - Admin: governance — approve, archive, manage. Can also edit (override).
-  // - Editor: create + edit + send to review. Cannot approve.
+  // - Admin: governance — approve all docs, archive, manage.
+  // - Editor: create + edit + send to review. Cannot approve by role alone.
+  // - Policy lead: edit + send to review + approve docs scoped to their
+  //   group via group_doc_permissions.can_approve. The server already
+  //   resolved that into `canApproveThisDoc`.
   // - Member/Translator: read + comment + propose amendments only.
   const isAdmin = userRole === "admin";
   const isEditor = userRole === "editor";
-  const canApprove = isAdmin;
-  const canSendToReview = isAdmin || isEditor;
+  const isPolicyLead = userRole === "policy_lead";
+  const canApprove = canApproveThisDoc;
+  const canSendToReview = isAdmin || isEditor || isPolicyLead;
   const canArchive = isAdmin;
   const [title, setTitle] = useState(initialTitle);
   const initialHtml = useMemo(() => contentToHtml(initialContent), [initialContent]);
@@ -274,47 +286,58 @@ export default function DocumentWorkspace({
             }
           />
 
-          {canEdit && (
+          {/*
+            Action bar visibility split from canEdit so approvers (admin /
+            policy_lead) can still see Approve/Reject during status='review'
+            even though the editor itself is locked.
+          */}
+          {(canEdit || canApprove || canArchive) && (
             <div className="border-t px-5 py-4">
-              <label
-                htmlFor="change-summary"
-                className="block text-xs font-medium uppercase tracking-wider text-slate-500"
-              >
-                {labels.changeSummary}
-                {(status === "review" || status === "approved") && (
-                  <span className="ml-1 text-red-600" aria-label={labels.required}>
-                    *
-                  </span>
-                )}
-              </label>
-              <input
-                id="change-summary"
-                value={changeSummary}
-                onChange={(e) => setChangeSummary(e.target.value)}
-                required={status === "review" || status === "approved"}
-                aria-required={status === "review" || status === "approved"}
-                placeholder={
-                  status === "review" || status === "approved"
-                    ? labels.changeSummaryHintRequired
-                    : labels.changeSummaryHint
-                }
-                className={`mt-1 w-full rounded border px-3 py-2 text-sm ${
-                  (status === "review" || status === "approved") &&
-                  !changeSummary.trim()
-                    ? "border-red-300 bg-red-50"
-                    : "border-slate-300"
-                }`}
-              />
+              {canEdit && (
+                <>
+                  <label
+                    htmlFor="change-summary"
+                    className="block text-xs font-medium uppercase tracking-wider text-slate-500"
+                  >
+                    {labels.changeSummary}
+                    {(status === "review" || status === "approved") && (
+                      <span className="ml-1 text-red-600" aria-label={labels.required}>
+                        *
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    id="change-summary"
+                    value={changeSummary}
+                    onChange={(e) => setChangeSummary(e.target.value)}
+                    required={status === "review" || status === "approved"}
+                    aria-required={status === "review" || status === "approved"}
+                    placeholder={
+                      status === "review" || status === "approved"
+                        ? labels.changeSummaryHintRequired
+                        : labels.changeSummaryHint
+                    }
+                    className={`mt-1 w-full rounded border px-3 py-2 text-sm ${
+                      (status === "review" || status === "approved") &&
+                      !changeSummary.trim()
+                        ? "border-red-300 bg-red-50"
+                        : "border-slate-300"
+                    }`}
+                  />
+                </>
+              )}
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={pending || !dirty}
-                  className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
-                >
-                  {pending ? labels.saving : labels.saveNewVersion}
-                </button>
+              <div className={`${canEdit ? "mt-4" : ""} flex flex-wrap items-center gap-3`}>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={pending || !dirty}
+                    className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
+                  >
+                    {pending ? labels.saving : labels.saveNewVersion}
+                  </button>
+                )}
                 {status !== "review" && status !== "approved" && canSendToReview && (
                   <button
                     type="button"
@@ -326,14 +349,24 @@ export default function DocumentWorkspace({
                   </button>
                 )}
                 {status === "review" && canApprove && (
-                  <button
-                    type="button"
-                    onClick={() => handleStatus("approved")}
-                    disabled={pending}
-                    className="rounded border border-green-700 px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-50"
-                  >
-                    {labels.approve}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleStatus("approved")}
+                      disabled={pending}
+                      className="rounded border border-green-700 px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-50"
+                    >
+                      {labels.approve}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStatus("draft")}
+                      disabled={pending}
+                      className="rounded border border-red-700 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-50"
+                    >
+                      {labels.reject}
+                    </button>
+                  </>
                 )}
                 {status === "review" && !canApprove && (
                   <span className="text-xs text-slate-500">

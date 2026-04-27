@@ -72,6 +72,7 @@ export default function UserRow({
           >
             <option value="admin">admin</option>
             <option value="editor">editor</option>
+            <option value="policy_lead">policy_lead</option>
             <option value="member">member</option>
             <option value="translator">translator</option>
           </select>
