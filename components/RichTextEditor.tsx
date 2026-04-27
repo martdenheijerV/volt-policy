@@ -174,19 +174,47 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
 
     // First-time seed: when realtime is on and the Y.Doc is empty after sync,
     // load the saved HTML once so existing docs keep their content.
+    //
+    // Two failure modes this guards against:
+    //  1. The `synced` event fires *before* this effect attaches the
+    //     listener (race when WS handshake is fast). We check
+    //     `provider.synced` synchronously and run the seed immediately
+    //     if it's already true.
+    //  2. The seed runs but the editor isn't ready to accept commands
+    //     yet — handled by the `editor` dep, which only resolves once
+    //     useEditor has mounted.
     useEffect(() => {
-      if (!realtime || !editor || !providerRef.current) return;
-      const onSync = () => {
-        const ydoc = ydocRef.current;
-        if (!ydoc) return;
+      if (!realtime || !editor) return;
+      const provider = providerRef.current;
+      const ydoc = ydocRef.current;
+      if (!provider || !ydoc) return;
+
+      let cancelled = false;
+      const seedIfEmpty = () => {
+        if (cancelled) return;
+        // Check both the raw Y.Doc fragment AND the editor's perceived
+        // emptiness — the Y.Doc can hold a single empty paragraph
+        // (length === 1) which still feels "empty" to a user, e.g. when
+        // a previous failed session persisted a blank state.
         const fragment = ydoc.getXmlFragment("default");
-        if (fragment.length === 0 && initialContent) {
+        const editorEmpty = editor.isEmpty;
+        const ydocEffectivelyEmpty = fragment.length === 0 || editorEmpty;
+        if (ydocEffectivelyEmpty && initialContent) {
           editor.commands.setContent(contentToHtml(initialContent));
         }
       };
-      providerRef.current.on("synced", onSync);
+
+      // Catch the case where sync already finished before we got here.
+      const alreadySynced = (provider as { synced?: boolean }).synced;
+      if (alreadySynced) {
+        seedIfEmpty();
+      }
+      // Always also listen — handles the normal "still connecting" case
+      // and any reconnection-and-resync after a network blip.
+      provider.on("synced", seedIfEmpty);
       return () => {
-        providerRef.current?.off("synced", onSync);
+        cancelled = true;
+        provider.off("synced", seedIfEmpty);
       };
     }, [editor, realtime, initialContent]);
 
