@@ -44,6 +44,8 @@ export interface DocumentWorkspaceLabels {
   confirmSendToReview: string;
   approve: string;
   reject: string;
+  /** Label on the button that flips an approved doc back to status='draft'. */
+  reopenForEdit: string;
   archive: string;
   awaitingApproval: string;
   /**
@@ -409,6 +411,20 @@ export default function DocumentWorkspace({
                     className="rounded border border-amber-600 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50"
                   >
                     {labels.sendToReview}
+                  </button>
+                )}
+                {/* Approved docs are locked. Approvers can flip them
+                    back to draft to prepare a new version — public
+                    keeps seeing the last-approved snapshot in the
+                    meantime (see migration 007). */}
+                {status === "approved" && canSendToReview && (
+                  <button
+                    type="button"
+                    onClick={() => handleStatus("draft")}
+                    disabled={pending}
+                    className="rounded border border-slate-500 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                  >
+                    {labels.reopenForEdit}
                   </button>
                 )}
                 {status === "review" && canApprove && (

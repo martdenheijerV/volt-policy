@@ -20,11 +20,16 @@ export default async function PublicDocumentPage({
   const sp = (await searchParams) ?? {};
   const supabase = await createClient();
 
+  // Public sees any doc that has ever been approved (and isn't archived),
+  // regardless of current status. This way an editor re-opening an
+  // approved doc to draft a new version doesn't temporarily yank the
+  // existing public version off /library.
   const { data: doc } = await supabase
     .from("documents")
     .select("*")
     .eq("slug", slug)
-    .eq("status", "approved")
+    .gte("approved_version_number", 1)
+    .neq("status", "archived")
     .maybeSingle<Document & { approved_version_number?: number | null }>();
 
   if (!doc) notFound();
@@ -99,7 +104,7 @@ export default async function PublicDocumentPage({
       </div>
       {doc.tags?.length ? (
         <div className="mt-3 flex flex-wrap gap-1">
-          {doc.tags.map((t) => (
+          {doc.tags.map((t: string) => (
             <span
               key={t}
               className="rounded bg-volt-50 px-2 py-0.5 text-xs text-volt-700"

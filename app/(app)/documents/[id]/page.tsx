@@ -96,13 +96,16 @@ export default async function DocumentPage({
       !!permission?.can_edit);
   // Three-phase workflow:
   //  - draft (concept): everyone with base edit rights can type. Live collab.
-  //  - review: NOBODY types. Even admin/policy_lead are locked out — they
-  //    only approve or reject. If they need a tweak, they reject → editor
-  //    fixes → re-send to review. Editors can still comment + suggest.
-  //  - approved: frozen public snapshot. Editors can still save new versions
-  //    on top via the existing pending-review flow.
+  //  - review: NOBODY types. Approvers approve or reject; editors comment.
+  //  - approved: locked + publicly visible. To make changes, an approver
+  //    clicks "Re-open for editing" which sends it back to draft. The
+  //    public layer keeps showing the last-approved snapshot during that
+  //    re-edit cycle (see migration 007).
+  //  - archived: locked except for admins (who may restore).
   const canEdit =
     doc.status === "review"
+      ? false
+      : doc.status === "approved"
       ? false
       : doc.status === "archived"
       ? profile?.role === "admin"
@@ -333,6 +336,25 @@ export default async function DocumentPage({
         </div>
       )}
 
+      {doc.status === "approved" && (
+        <div
+          className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900 print:hidden"
+          role="status"
+        >
+          ✅{" "}
+          <strong>
+            <T>Approved.</T>
+          </strong>{" "}
+          {(
+            await tr(
+              "Public sees v{n} on /library/{slug}. Editing is locked. Approvers can re-open this doc to prepare the next version — public will keep seeing v{n} in the meantime."
+            )
+          )
+            .replace("{n}", String(doc.approved_version_number ?? doc.current_version))
+            .replace("{slug}", doc.slug)}
+        </div>
+      )}
+
       {hasPendingReview && profile?.role === "admin" && (
         <PendingReviewBanner
           documentId={doc.id}
@@ -461,6 +483,7 @@ async function buildWorkspaceLabels(
     confirmSendToReview,
     approve,
     reject,
+    reopenForEdit,
     archive,
     awaitingApproval,
     required,
@@ -485,6 +508,7 @@ async function buildWorkspaceLabels(
     ),
     tr("Approve"),
     tr("Reject"),
+    tr("Re-open for editing"),
     tr("Archive"),
     tr("Awaiting admin approval"),
     tr("Required"),
@@ -509,6 +533,7 @@ async function buildWorkspaceLabels(
     confirmSendToReview,
     approve,
     reject,
+    reopenForEdit,
     archive,
     awaitingApproval,
     required,

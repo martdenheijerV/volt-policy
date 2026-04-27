@@ -346,10 +346,22 @@ export async function updateStatus(documentId: string, status: DocStatus) {
     canApproveThisDoc = await canApproveDoc(documentId);
   }
 
+  // Fetch current state — needed to gate transitions out of `approved`.
+  const { data: existingDoc } = await supabase
+    .from("documents")
+    .select("status,owner_id")
+    .eq("id", documentId)
+    .maybeSingle<{ status: DocStatus; owner_id: string | null }>();
+  const isOwner = existingDoc?.owner_id === user.id;
+
   // Workflow gates (defense in depth — UI also hides the buttons):
-  // - Editors / admins / policy_leads can send docs to review.
-  // - Only admins can archive.
-  // - approve requires canApproveThisDoc (admin or scoped policy_lead).
+  // - approve requires canApproveThisDoc.
+  // - archive: admin only.
+  // - re-open from approved (status flipping back to 'draft' or 'review'):
+  //   admin / owner / scoped policy_lead. Plain editors can collaborate
+  //   but can't take a published doc off the lock.
+  // - everything else (draft/review transitions on non-approved docs):
+  //   editor / policy_lead / admin / owner.
   if (status === "approved") {
     if (!canApproveThisDoc) {
       return {
@@ -362,6 +374,15 @@ export async function updateStatus(documentId: string, status: DocStatus) {
       return {
         ok: false as const,
         error: "Only admins can archive documents.",
+      };
+    }
+  } else if (existingDoc?.status === "approved") {
+    // Re-opening an approved doc: tighter gate.
+    if (!(canApproveThisDoc || isOwner)) {
+      return {
+        ok: false as const,
+        error:
+          "Only the document owner or an approver can re-open an approved document for editing.",
       };
     }
   } else if (

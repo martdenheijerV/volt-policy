@@ -14,10 +14,19 @@ export default async function LibraryPage({
   const params = await searchParams;
   const supabase = await createClient();
 
+  // Public layer: every doc that has been approved at least once shows
+  // up — even if it's currently in 'draft' (an editor is preparing the
+  // next version). Public always reads from document_versions[approved_version_number]
+  // so they see the last-approved snapshot, never a working draft.
+  // Archived docs stay hidden.
   let query = supabase
     .from("documents")
     .select("*")
-    .eq("status", "approved")
+    // approved_version_number is >= 1 once a doc has been approved at
+    // least once (versions start at 1). Using gte instead of "is not null"
+    // because the lightweight DB shim doesn't implement .not().
+    .gte("approved_version_number", 1)
+    .neq("status", "archived")
     .order("approved_at", { ascending: false });
 
   if (params.q)
