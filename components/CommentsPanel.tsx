@@ -228,19 +228,21 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     const open = tree.tops.filter((c) => !c.resolved);
     const resolved = tree.tops.filter((c) => c.resolved);
 
+    /*
+      Compose form is only shown after the user explicitly invokes
+      startComment (via the floating "+" on selection). When idle,
+      the panel renders just the anchored comment cards.
+    */
+    const composeOpen = !!anchor || !!replyTo;
+
     return (
       <aside
         ref={wrapperRef}
-        className="rounded-lg bg-white/70 p-4 backdrop-blur lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto print:hidden"
+        className="bg-transparent print:hidden"
       >
-        <h2 className="text-lg font-semibold">{labels.comments}</h2>
+        {/* Header removed per Mart's request — the "Reacties" heading
+            and the always-visible compose form used to live here. */}
 
-        {/*
-          Approved-doc notice: when the doc is locked because it's been
-          approved, surface the reason here so a user looking at a
-          read-only editor doesn't wonder why they can't type. Comments
-          remain open — that's the whole point of leaving them visible.
-        */}
         {labels.approvedNotice && (
           <p
             role="note"
@@ -250,8 +252,8 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           </p>
         )}
 
-        {currentUserId ? (
-          <div className="mt-3 space-y-2">
+        {currentUserId && composeOpen ? (
+          <div className="mb-4 space-y-2 rounded-lg border bg-white p-3 shadow-md">
             {replyTo ? (
               <div className="flex items-start gap-2 rounded border-l-4 border-slate-400 bg-slate-50 p-2 text-xs">
                 <div className="flex-1 italic text-slate-600">
@@ -334,14 +336,11 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 : labels.postComment}
             </button>
           </div>
-        ) : (
-          <p className="mt-3 text-sm text-slate-500">{labels.signInToComment}</p>
-        )}
+        ) : null}
 
-        <div className="mt-5">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {labels.openTpl.replace("{n}", String(open.length))}
-          </h3>
+        <div className="mt-1">
+          {/* "Open (n)" header removed — anchored cards float at the
+              text they refer to, so a count header would be redundant. */}
           {/*
             Position relative so individual comment threads can float
             at their anchor's vertical offset (when anchorOffset is
@@ -439,10 +438,10 @@ function CommentThread({
           : undefined
       }
       className={[
-        "rounded border p-3 text-sm transition",
+        "rounded-lg bg-white p-3 text-sm shadow-md transition",
         isActive
-          ? "border-volt-500 bg-volt-50 shadow-sm ring-2 ring-volt-200"
-          : "border-slate-200 bg-slate-50 hover:border-slate-300",
+          ? "ring-2 ring-volt-500"
+          : "border border-slate-200 hover:shadow-lg",
         hasAnchor && onAnchorClick ? "cursor-pointer" : "",
       ].join(" ")}
       onClick={hasAnchor ? handleJump : undefined}

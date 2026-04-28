@@ -76,6 +76,12 @@ interface Props {
    * toolbar stays glued to the top.
    */
   headerSlot?: React.ReactNode;
+  /**
+   * Optional extra controls rendered at the right edge of the toolbar
+   * (next to the formatting buttons). DocumentWorkspace uses this to
+   * inject the 🤖 AI assistant menu so it lives in the sticky header.
+   */
+  toolbarTrailingSlot?: React.ReactNode;
   onAnchorClickInDoc?: (commentId: string) => void;
   realtime?: RealtimeConfig | null;
   /**
@@ -104,6 +110,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       onCommentRequest,
       onSelectionRect,
       headerSlot,
+      toolbarTrailingSlot,
       onAnchorClickInDoc,
       realtime,
       onRemoteStatusChange,
@@ -418,7 +425,11 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
             />
           )}
           {editable ? (
-            <Toolbar editor={editor} onCommentRequest={onCommentRequest} />
+            <Toolbar
+              editor={editor}
+              onCommentRequest={onCommentRequest}
+              trailingSlot={toolbarTrailingSlot}
+            />
           ) : (
             <ReadOnlyBar editor={editor} onCommentRequest={onCommentRequest} />
           )}
@@ -532,9 +543,11 @@ function ReadOnlyBar({
 function Toolbar({
   editor,
   onCommentRequest,
+  trailingSlot,
 }: {
   editor: Editor;
   onCommentRequest: (text: string) => void;
+  trailingSlot?: React.ReactNode;
 }) {
   const Btn = ({
     onClick,
@@ -634,12 +647,14 @@ function Toolbar({
       <Btn title="Undo" onClick={() => editor.chain().focus().undo().run()}>↶</Btn>
       <Btn title="Redo" onClick={() => editor.chain().focus().redo().run()}>↷</Btn>
 
-      {/*
-        The big "💬 Comment on selection" button used to live here.
-        It's now a floating "+" affordance that pops up in the canvas
-        margin at the height of the current selection, mirroring
-        Google Docs. See SelectionCommentAffordance below.
-      */}
+      {trailingSlot && (
+        <>
+          <Divider />
+          <div className="ml-auto flex items-center gap-1">
+            {trailingSlot}
+          </div>
+        </>
+      )}
     </div>
   );
 }

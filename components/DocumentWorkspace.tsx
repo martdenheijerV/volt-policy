@@ -22,6 +22,7 @@ import DeleteDocumentButton, {
 // rendered — the comments-layer with anchor-positioned cards replaces
 // it. The component file stays in components/ in case we want to
 // resurface a subset later.
+import ToolbarAIMenu from "./ToolbarAIMenu";
 import { autosaveDraft, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
@@ -448,6 +449,14 @@ export default function DocumentWorkspace({
           <div className="editor-paper">
             <div className="paper-body-prose">
               <RichTextEditor
+                toolbarTrailingSlot={
+                  <ToolbarAIMenu
+                    documentId={documentId}
+                    contentHtml={contentHtml}
+                    language={language}
+                    labels={aiLabels}
+                  />
+                }
                 headerSlot={
                   <div className="px-[2cm] pt-6">
                     <label htmlFor="doc-title" className="sr-only">
@@ -694,8 +703,9 @@ export default function DocumentWorkspace({
       </div>
 
       {/*
-        Floating comments layer — absolutely positioned to the right
-        of the paper, comment-cards inside it placed at anchor heights.
+        Floating comments layer — comment cards float in here at the
+        vertical height of their anchor in the editor. No header,
+        no compose form by default; just anchored cards.
       */}
       <div className="comments-layer">
         <CommentsPanel
@@ -708,16 +718,6 @@ export default function DocumentWorkspace({
           onCommentsChanged={handleLocalCommentsChanged}
           labels={commentsLabels}
         />
-        {aiOpen && (
-          <div className="mt-6">
-            <AIPanel
-              documentId={documentId}
-              contentHtml={contentHtml}
-              language={language}
-              labels={aiLabels}
-            />
-          </div>
-        )}
       </div>
       </div>
       </div>
