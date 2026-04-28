@@ -104,22 +104,15 @@ export async function createDocument(formData: FormData) {
       tags,
       owner_id: user.id,
       current_content: content,
-      current_version: 1,
+      // current_version stays at 0 until the first approval. Under the
+      // autosave-first model, V1 is the first admin/lead sign-off — not
+      // the "save count". A fresh draft has no version yet by design.
+      current_version: 0,
     })
     .select("id")
     .single();
 
   if (error) throw error;
-
-  // Seed first version
-  await supabase.from("document_versions").insert({
-    document_id: doc.id,
-    version_number: 1,
-    title,
-    content,
-    change_summary: "Initial version",
-    author_id: user.id,
-  });
 
   // Save custom metadata values
   const { data: allFields } = await supabase
@@ -200,6 +193,64 @@ export async function toggleVersionHidden(
   });
   revalidatePath(`/documents/${documentId}/history`);
   return { ok: true };
+}
+
+/**
+ * Autosave a draft. Lightweight UPDATE only — no version row, no audit
+ * entry, no email. Called by the editor on a debounced timer (~1.5s
+ * after last keystroke) so the working copy on the server tracks
+ * what's in the browser without flooding the version history.
+ *
+ * Hard-locked when status='review' or 'approved': we already lock the
+ * editor UI client-side, but defense in depth — we mirror the same
+ * rule here so a stale tab can't accidentally overwrite a frozen
+ * snapshot via this endpoint.
+ *
+ * Versions (V1, V2, V3, …) are minted **only** at approval time by
+ * `updateStatus(status='approved')`. That's what makes them feel
+ * "official" — a version exists exactly when an admin/lead has signed
+ * off on it. Use `saveNewVersion` only for legacy explicit-save flows
+ * (e.g. importing a document) where we want a single audit trail row;
+ * the editor itself no longer calls it on the typing path.
+ */
+export async function autosaveDraft(
+  documentId: string,
+  data: { title: string; content: string }
+): Promise<{ ok: true; savedAt: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated" };
+
+  // Bail out if the doc is locked. We don't surface this as a user
+  // error because the UI already shows the lock state — the autosave
+  // just no-ops silently.
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("status")
+    .eq("id", documentId)
+    .maybeSingle<{ status: DocStatus }>();
+  if (doc?.status === "review") {
+    return { ok: false, error: "Document is locked under review." };
+  }
+  if (doc?.status === "archived") {
+    return { ok: false, error: "Document is archived." };
+  }
+
+  // RLS handles the auth check (only users with edit-rights can update
+  // current_content). If RLS rejects the update we just return ok=false
+  // and the editor won't show "Saved" — same UX as a network blip.
+  const { error } = await supabase
+    .from("documents")
+    .update({ title: data.title, current_content: data.content })
+    .eq("id", documentId);
+  if (error) return { ok: false, error: error.message };
+
+  // Deliberately no revalidatePath here: re-rendering the whole page on
+  // every autosave defeats the point. Other tabs see the change via
+  // Hocuspocus realtime broadcast already.
+  return { ok: true, savedAt: new Date().toISOString() };
 }
 
 export async function saveNewVersion(
@@ -326,7 +377,11 @@ export async function saveNewVersion(
   return { ok: true as const, version: nextVersion };
 }
 
-export async function updateStatus(documentId: string, status: DocStatus) {
+export async function updateStatus(
+  documentId: string,
+  status: DocStatus,
+  options?: { changeSummary?: string }
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -399,46 +454,81 @@ export async function updateStatus(documentId: string, status: DocStatus) {
   const patch: Record<string, unknown> = { status };
 
   if (status === "review") {
-    // Freeze a snapshot at "send to review" time. Editors are locked
-    // out of the doc while status='review', so what the reviewer sees
-    // is exactly what gets approved or rejected.
-    const { data: cur } = await supabase
-      .from("documents")
-      .select("current_version")
-      .eq("id", documentId)
-      .maybeSingle();
-    if (!cur?.current_version) {
-      return {
-        ok: false as const,
-        error: "Save the document at least once before sending it to review.",
-      };
+    // No version row gets created at "send to review" time. The doc is
+    // locked via `doc_editable` while status='review' so current_content
+    // can't drift; reviewers read exactly what's already on disk.
+    // Versions only get minted on `approved` — that's the single moment
+    // when V1, V2, V3, … become official, so the audit trail equals the
+    // history of admin/lead sign-offs.
+    //
+    // We do stash the proposed change summary on the doc so the
+    // approver sees it in their decision context. It survives a reject
+    // (gets cleared on draft transition).
+    if (options?.changeSummary?.trim()) {
+      patch.pending_change_summary = options.changeSummary.trim();
     }
-    patch.review_version_number = cur.current_version;
   }
 
   if (status === "approved") {
     patch.approved_at = new Date().toISOString();
-    // The approved snapshot = the version that was sent for review.
-    // Falls back to current_version only for legacy data where
-    // review_version_number was never set.
-    const { data: cur } = await supabase
+    // Mint a new official version. Number = (max existing) + 1, so V1
+    // is the first-ever approval, V2 the second, etc. The audit log
+    // and history pages key off these rows.
+    const { data: existing } = await supabase
+      .from("document_versions")
+      .select("version_number")
+      .eq("document_id", documentId)
+      .order("version_number", { ascending: false })
+      .limit(1);
+    const maxExisting =
+      Array.isArray(existing) && existing[0]?.version_number
+        ? Number(existing[0].version_number)
+        : 0;
+    const nextVersion = maxExisting + 1;
+
+    // Snapshot current_content into a new version row. Title goes along
+    // for the ride so a future title change doesn't retroactively
+    // rewrite history.
+    const { data: live } = await supabase
       .from("documents")
-      .select("current_version,review_version_number")
+      .select("title,current_content,pending_change_summary")
       .eq("id", documentId)
-      .maybeSingle();
-    const approveVersion =
-      cur?.review_version_number ?? cur?.current_version ?? null;
-    if (approveVersion) {
-      patch.approved_version_number = approveVersion;
+      .maybeSingle<{
+        title: string;
+        current_content: string;
+        pending_change_summary: string | null;
+      }>();
+    if (live) {
+      const summary =
+        options?.changeSummary?.trim() ||
+        live.pending_change_summary?.trim() ||
+        null;
+      const { error: insErr } = await supabase
+        .from("document_versions")
+        .insert({
+          document_id: documentId,
+          version_number: nextVersion,
+          title: live.title,
+          content: live.current_content,
+          change_summary: summary,
+          author_id: user.id,
+        });
+      if (insErr) {
+        return { ok: false as const, error: insErr.message };
+      }
     }
-    // Clear the review pointer — review is over.
+    patch.approved_version_number = nextVersion;
+    patch.current_version = nextVersion;
     patch.review_version_number = null;
+    patch.pending_change_summary = null;
   }
 
   if (status === "draft") {
-    // Going back to draft (e.g. after a reject) clears the pending
-    // review snapshot so editors can iterate freely again.
+    // Going back to draft (e.g. after a reject, or "re-open for edit"
+    // on an approved doc) clears the pending review snapshot + the
+    // proposed change summary. Editors iterate freely again.
     patch.review_version_number = null;
+    patch.pending_change_summary = null;
   }
 
   const { error } = await supabase

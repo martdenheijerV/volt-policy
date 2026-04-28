@@ -33,10 +33,14 @@ async function signOut(request: Request) {
   const cfg = getCookieConfig();
   cookieStore.delete(cfg.name);
 
-  // Build absolute "after-logout" URL based on the request origin so this
-  // works in dev, on Coolify staging, and in prod without env juggling.
-  const origin = new URL(request.url).origin;
-  const homepage = `${origin}/`;
+  // Where to send the user after logout. Production points at the
+  // public marketing/landing site; in dev/staging we fall back to the
+  // request origin so this still works locally without env tweaks.
+  const homepage = process.env.APP_HOME_URL?.trim()
+    ? process.env.APP_HOME_URL.trim()
+    : process.env.NODE_ENV === "production"
+    ? "https://policy.voltmaastricht.nl/"
+    : `${new URL(request.url).origin}/`;
 
   let target = homepage;
   try {

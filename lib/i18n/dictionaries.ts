@@ -93,6 +93,10 @@ const en: Dict = {
   "dashboard.verbComment": "comment",
   "dashboard.verbEdit": "edit",
   "dashboard.verbApprove": "approve",
+  "dashboard.incomingRequestsHeading": "Edit-rights requests waiting on you",
+  "dashboard.incomingRequestsSubtitle": "Decide on these requests so collaborators can start typing.",
+  "dashboard.incomingRequestRowTpl": "{name} · requested {date}",
+  "dashboard.decideOnDoc": "Decide on document",
 };
 
 const nl: Dict = {
@@ -176,6 +180,10 @@ const nl: Dict = {
   "dashboard.verbComment": "becommentariëren",
   "dashboard.verbEdit": "bewerken",
   "dashboard.verbApprove": "goedkeuren",
+  "dashboard.incomingRequestsHeading": "Aanvragen die op jouw beslissing wachten",
+  "dashboard.incomingRequestsSubtitle": "Beslis op deze aanvragen zodat collega's kunnen gaan typen.",
+  "dashboard.incomingRequestRowTpl": "{name} · aangevraagd {date}",
+  "dashboard.decideOnDoc": "Beslis op document",
 };
 
 const de: Dict = {
@@ -259,6 +267,10 @@ const de: Dict = {
   "dashboard.verbComment": "kommentieren",
   "dashboard.verbEdit": "bearbeiten",
   "dashboard.verbApprove": "freigeben",
+  "dashboard.incomingRequestsHeading": "Anfragen, die auf deine Entscheidung warten",
+  "dashboard.incomingRequestsSubtitle": "Entscheide über diese Anfragen, damit andere mit dem Tippen beginnen können.",
+  "dashboard.incomingRequestRowTpl": "{name} · angefragt {date}",
+  "dashboard.decideOnDoc": "Im Dokument entscheiden",
 };
 
 const fr: Dict = {
@@ -342,6 +354,10 @@ const fr: Dict = {
   "dashboard.verbComment": "commentaire",
   "dashboard.verbEdit": "modification",
   "dashboard.verbApprove": "approbation",
+  "dashboard.incomingRequestsHeading": "Demandes en attente de votre décision",
+  "dashboard.incomingRequestsSubtitle": "Décidez sur ces demandes pour que les contributeurs puissent commencer à éditer.",
+  "dashboard.incomingRequestRowTpl": "{name} · demandé le {date}",
+  "dashboard.decideOnDoc": "Décider dans le document",
 };
 
 const it: Dict = {
@@ -425,6 +441,10 @@ const it: Dict = {
   "dashboard.verbComment": "commento",
   "dashboard.verbEdit": "modifica",
   "dashboard.verbApprove": "approvazione",
+  "dashboard.incomingRequestsHeading": "Richieste in attesa della tua decisione",
+  "dashboard.incomingRequestsSubtitle": "Decidi su queste richieste affinché i collaboratori possano iniziare a digitare.",
+  "dashboard.incomingRequestRowTpl": "{name} · richiesto il {date}",
+  "dashboard.decideOnDoc": "Decidi nel documento",
 };
 
 const es: Dict = {
@@ -508,6 +528,10 @@ const es: Dict = {
   "dashboard.verbComment": "comentar",
   "dashboard.verbEdit": "editar",
   "dashboard.verbApprove": "aprobar",
+  "dashboard.incomingRequestsHeading": "Solicitudes esperando tu decisión",
+  "dashboard.incomingRequestsSubtitle": "Decide sobre estas solicitudes para que los colaboradores puedan empezar a editar.",
+  "dashboard.incomingRequestRowTpl": "{name} · solicitado el {date}",
+  "dashboard.decideOnDoc": "Decidir en el documento",
 };
 
 export const DICTIONARIES: Record<Lang, Dict> = { en, nl, de, fr, it, es };

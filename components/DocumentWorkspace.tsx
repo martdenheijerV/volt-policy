@@ -15,7 +15,7 @@ import CommentsPanel, {
   type CommentsPanelLabels,
 } from "./CommentsPanel";
 import AIPanel, { type AIPanelLabels } from "./AIPanel";
-import { saveNewVersion, updateStatus } from "@/app/(app)/documents/actions";
+import { autosaveDraft, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
 import type { Comment, DocStatus, UserRole } from "@/lib/types";
@@ -34,11 +34,20 @@ export interface DocumentWorkspaceLabels {
   edit: string;
   preview: string;
   title: string;
+  /** Section heading for the auto-saved indicator. */
+  autosaveLabel: string;
+  /** "Saving…" while the autosave POST is in flight. */
+  autosaving: string;
+  /** "Saved a moment ago" when up-to-date. */
+  autosavedJustNow: string;
+  /** Template "Saved at {time}" — {time} replaced client-side. */
+  autosavedAtTpl: string;
+  /** "Failed to save" when the autosave call returned an error. */
+  autosaveFailed: string;
+  /** Heading for the change-summary input that travels with send-to-review. */
   changeSummary: string;
   changeSummaryHint: string;
   changeSummaryHintRequired: string;
-  saveNewVersion: string;
-  saving: string;
   sendToReview: string;
   /** Confirmation prompt shown before flipping a doc to status='review'. */
   confirmSendToReview: string;
@@ -55,11 +64,10 @@ export interface DocumentWorkspaceLabels {
   remoteStatusTpl: string;
   required: string;
   changeSummaryRequired: string;
-  /** Template "Saved as v{n}." — {n} is replaced client-side. */
-  savedAsVersionTpl: string;
+  /** Template "Approved as v{n}." — {n} is replaced client-side. */
+  approvedAsVersionTpl: string;
   /** Template "Status set to {status}." — {status} is replaced client-side. */
   statusSetToTpl: string;
-  failedToSave: string;
   failedToUpdateStatus: string;
   status: Record<DocStatus, string>;
 }
@@ -138,10 +146,51 @@ export default function DocumentWorkspace({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Autosave state. `lastSavedAt` is the server-confirmed moment; we use
+  // it to render "Saved a few seconds ago" without spamming re-renders.
+  const [autosaveState, setAutosaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const commentsRef = useRef<CommentsPanelHandle>(null);
   const editorRef = useRef<RichTextEditorHandle>(null);
 
   const dirty = title !== savedTitle || contentHtml !== savedHtml;
+
+  /*
+    Debounced autosave. Triggers ~1.5s after the user stops typing
+    (or changes the title). Only fires while:
+      * canEdit is true (the editor is unlocked)
+      * the doc is in 'draft' (we never autosave to a locked status)
+      * something is actually dirty
+    Cleanup cancels in-flight timers on unmount or before re-firing,
+    so a fast typer doesn't stack 50 server roundtrips.
+  */
+  useEffect(() => {
+    if (!canEdit) return;
+    if (status !== "draft") return;
+    if (!dirty) return;
+    const handle = setTimeout(async () => {
+      setAutosaveState("saving");
+      try {
+        const res = await autosaveDraft(documentId, {
+          title,
+          content: contentHtml,
+        });
+        if (!res.ok) {
+          setAutosaveState("error");
+          return;
+        }
+        setSavedTitle(title);
+        setSavedHtml(contentHtml);
+        setLastSavedAt(new Date(res.savedAt));
+        setAutosaveState("saved");
+      } catch {
+        setAutosaveState("error");
+      }
+    }, 1500);
+    return () => clearTimeout(handle);
+  }, [canEdit, status, dirty, title, contentHtml, documentId]);
 
   // Anchor specs derived from comments — passed to the editor for highlighting.
   const anchors: AnchorSpec[] = useMemo(
@@ -177,63 +226,65 @@ export default function DocumentWorkspace({
     });
   }, []);
 
-  function handleSave() {
+  /*
+    Status changes (send-to-review / approve / reject / archive). The
+    change_summary input only matters when going to 'review' or 'approved' —
+    we forward it to the server so the approver sees it / it lands on
+    the new version row at approval time. For other transitions we
+    silently ignore whatever's typed.
+  */
+  function handleStatus(next: DocStatus) {
+    if (next === "review") {
+      const ok = window.confirm(labels.confirmSendToReview);
+      if (!ok) return;
+      if (!changeSummary.trim()) {
+        setError(labels.changeSummaryRequired);
+        return;
+      }
+    }
     setError(null);
     setMessage(null);
-    // Mirror the server-side guard so the user gets a clear inline message
-    // instead of Next.js's generic "Server Components render" error page.
-    if (
-      (status === "review" || status === "approved") &&
-      !changeSummary.trim()
-    ) {
-      setError(labels.changeSummaryRequired);
-      return;
-    }
     startTransition(async () => {
       try {
-        const res = await saveNewVersion(documentId, {
-          title,
-          content: contentHtml,
-          change_summary: changeSummary,
+        // Force-flush any pending autosave before flipping status. This
+        // matters most for "send to review": whatever's in the editor
+        // right now is what will get locked + (eventually) approved.
+        if (next === "review" && dirty) {
+          await autosaveDraft(documentId, { title, content: contentHtml });
+          setSavedTitle(title);
+          setSavedHtml(contentHtml);
+        }
+        const res = await updateStatus(documentId, next, {
+          changeSummary:
+            next === "review" || next === "approved"
+              ? changeSummary || undefined
+              : undefined,
         });
         if (!res.ok) {
           setError(res.error);
           return;
         }
-        setSavedTitle(title);
-        setSavedHtml(contentHtml);
-        setChangeSummary("");
-        setMessage(labels.savedAsVersionTpl.replace("{n}", String(res.version)));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : labels.failedToSave);
-      }
-    });
-  }
-
-  function handleStatus(next: DocStatus) {
-    // Sending to review is destructive for collaborators currently typing —
-    // it freezes a snapshot and locks the editor for everyone. Confirm
-    // before pulling the trigger so a misclick doesn't kick co-authors
-    // out of their flow.
-    if (next === "review") {
-      const ok = window.confirm(labels.confirmSendToReview);
-      if (!ok) return;
-    }
-    setError(null);
-    setMessage(null);
-    startTransition(async () => {
-      try {
-        const res = await updateStatus(documentId, next);
-        if (!res.ok) {
-          setError(res.error);
-          return;
+        if (next === "approved") {
+          // Server attached the new version number to the response shape;
+          // our typings are loose so we feature-detect.
+          const v = (res as { version?: number }).version;
+          if (typeof v === "number") {
+            setMessage(
+              labels.approvedAsVersionTpl.replace("{n}", String(v))
+            );
+          } else {
+            setMessage(
+              labels.statusSetToTpl.replace("{status}", labels.status[next])
+            );
+          }
+        } else {
+          setMessage(
+            labels.statusSetToTpl.replace("{status}", labels.status[next])
+          );
         }
-        setMessage(
-          labels.statusSetToTpl.replace("{status}", labels.status[next])
-        );
+        setChangeSummary("");
         // Live broadcast to everyone else in this Hocuspocus room so
-        // their UI flips instantly (lock/unlock + toast). Our own browser
-        // gets refreshed by the regular Next.js revalidation.
+        // their UI flips instantly (lock/unlock + toast).
         editorRef.current?.broadcastStatus(next, currentUserName ?? "Someone");
       } catch (e) {
         setError(e instanceof Error ? e.message : labels.failedToUpdateStatus);
@@ -305,7 +356,16 @@ export default function DocumentWorkspace({
               {labels.preview}
             </button>
           </div>
-          <span className="text-sm text-slate-500">v{currentVersion}</span>
+          {/*
+            Version label. Until the doc has been approved at least once
+            we don't show a v0 (which would be misleading: the official
+            version numbers start at v1 with the first approval).
+            Instead we show the live status name so users see "Concept",
+            "In review", etc. while a number doesn't exist yet.
+          */}
+          <span className="text-sm text-slate-500">
+            {currentVersion > 0 ? `v${currentVersion}` : labels.status[status]}
+          </span>
         </div>
 
         {/* Editor stays mounted across view toggles to preserve cursor + content */}
@@ -358,51 +418,75 @@ export default function DocumentWorkspace({
           */}
           {(canEdit || canApprove || canArchive) && (
             <div className="border-t px-5 py-4">
+              {/*
+                Autosave status indicator. Replaces the old
+                "Save new version" button — the editor saves continuously
+                in the background, no manual click needed. The
+                change-summary input only appears next to the
+                "Send to review" button (where it actually matters,
+                because that's the moment the version becomes official).
+              */}
               {canEdit && (
-                <>
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="mb-4 text-xs text-slate-500"
+                >
+                  <span className="mr-1 font-medium">{labels.autosaveLabel}:</span>
+                  {autosaveState === "saving" && (
+                    <span>{labels.autosaving}</span>
+                  )}
+                  {autosaveState === "saved" && lastSavedAt && (
+                    <span>
+                      {labels.autosavedAtTpl.replace(
+                        "{time}",
+                        lastSavedAt.toLocaleTimeString()
+                      )}
+                    </span>
+                  )}
+                  {autosaveState === "saved" && !lastSavedAt && (
+                    <span>{labels.autosavedJustNow}</span>
+                  )}
+                  {autosaveState === "idle" && !dirty && (
+                    <span>{labels.autosavedJustNow}</span>
+                  )}
+                  {autosaveState === "idle" && dirty && (
+                    <span>{labels.autosaving}</span>
+                  )}
+                  {autosaveState === "error" && (
+                    <span className="text-red-700">
+                      ⚠ {labels.autosaveFailed}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/*
+                Change summary lives next to send-to-review because that's
+                when it matters: the editor is telling the approver
+                "here's what changed and why". The string ends up on the
+                version row at approval time. Hidden in draft for users
+                who can't ship the workflow forward.
+              */}
+              {canEdit && status === "draft" && canSendToReview && (
+                <div className="mb-3">
                   <label
                     htmlFor="change-summary"
                     className="block text-xs font-medium uppercase tracking-wider text-slate-500"
                   >
                     {labels.changeSummary}
-                    {(status === "review" || status === "approved") && (
-                      <span className="ml-1 text-red-600" aria-label={labels.required}>
-                        *
-                      </span>
-                    )}
                   </label>
                   <input
                     id="change-summary"
                     value={changeSummary}
                     onChange={(e) => setChangeSummary(e.target.value)}
-                    required={status === "review" || status === "approved"}
-                    aria-required={status === "review" || status === "approved"}
-                    placeholder={
-                      status === "review" || status === "approved"
-                        ? labels.changeSummaryHintRequired
-                        : labels.changeSummaryHint
-                    }
-                    className={`mt-1 w-full rounded border px-3 py-2 text-sm ${
-                      (status === "review" || status === "approved") &&
-                      !changeSummary.trim()
-                        ? "border-red-300 bg-red-50"
-                        : "border-slate-300"
-                    }`}
+                    placeholder={labels.changeSummaryHintRequired}
+                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                   />
-                </>
+                </div>
               )}
 
-              <div className={`${canEdit ? "mt-4" : ""} flex flex-wrap items-center gap-3`}>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={pending || !dirty}
-                    className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
-                  >
-                    {pending ? labels.saving : labels.saveNewVersion}
-                  </button>
-                )}
+              <div className="flex flex-wrap items-center gap-3">
                 {status !== "review" && status !== "approved" && canSendToReview && (
                   <button
                     type="button"

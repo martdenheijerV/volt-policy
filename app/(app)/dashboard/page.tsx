@@ -72,14 +72,27 @@ export default async function DashboardPage() {
       })
     : [];
 
-  // Pending edit-rights requests this user has filed (so they can see
-  // their own ask waiting on someone). Wrapped in try/catch because the
-  // table might not exist yet on a stale deploy that hasn't run
-  // migration 008. We skip the section silently in that case.
+  // Edit-rights requests, both directions:
+  //   * myPendingRequests = ones I filed, waiting on someone
+  //   * incomingRequests  = ones I can decide (admin OR doc owner OR
+  //                          can_approve_doc), filtered by RLS so this
+  //                          user only sees their own decisions queue
+  //
+  // Wrapped in try/catch because the table might not exist yet on a
+  // stale deploy that hasn't run migration 008. We skip the sections
+  // silently in that case.
   let myPendingRequests: {
     id: string;
     document_id: string;
     document_title: string;
+    created_at: string;
+  }[] = [];
+  let incomingRequests: {
+    id: string;
+    document_id: string;
+    document_title: string;
+    requester_name: string | null;
+    message: string | null;
     created_at: string;
   }[] = [];
   if (userId) {
@@ -104,6 +117,36 @@ export default async function DashboardPage() {
       });
     } catch {
       myPendingRequests = [];
+    }
+    try {
+      incomingRequests = await withUser(userId, async (sql) => {
+        // RLS already filters to rows this user can decide. We additionally
+        // exclude self-requests from the inbox so the same row doesn't
+        // appear in both lists.
+        return await sql<{
+          id: string;
+          document_id: string;
+          document_title: string;
+          requester_name: string | null;
+          message: string | null;
+          created_at: string;
+        }[]>`
+          select r.id,
+                 r.document_id,
+                 d.title as document_title,
+                 coalesce(p.full_name, r.requester_name_cached) as requester_name,
+                 r.message,
+                 r.created_at
+            from public.edit_rights_requests r
+            join public.documents d on d.id = r.document_id
+            left join public.profiles p on p.id = r.requester_id
+           where r.status = 'pending'
+             and r.requester_id <> ${userId}
+           order by r.created_at desc
+        `;
+      });
+    } catch {
+      incomingRequests = [];
     }
   }
 
@@ -398,6 +441,65 @@ export default async function DashboardPage() {
           )}
         </section>
       </div>
+
+      {/*
+        Approver inbox: edit-rights requests waiting on this user's
+        decision. RLS already restricts the query to rows this user can
+        actually decide (admin OR doc owner OR can_approve_doc), so we
+        just render whatever came back. Each row links into the document
+        where the EditRightsPanel exposes the approve/reject buttons —
+        keeping the decision context (the doc itself) one click away.
+      */}
+      {incomingRequests.length > 0 && (
+        <div className="mt-10">
+          <section
+            aria-labelledby="incoming-heading"
+            className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+          >
+            <h2
+              id="incoming-heading"
+              className="text-xl font-semibold text-amber-900"
+            >
+              {t("dashboard.incomingRequestsHeading")}
+            </h2>
+            <p className="mt-1 text-sm text-amber-800">
+              {t("dashboard.incomingRequestsSubtitle")}
+            </p>
+            <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
+              {incomingRequests.map((r) => (
+                <li key={r.id} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/documents/${r.document_id}`}
+                        className="font-medium text-volt-700 hover:underline"
+                      >
+                        {r.document_title}
+                      </Link>
+                      <div className="text-xs text-slate-600">
+                        {(t("dashboard.incomingRequestRowTpl"))
+                          .replace("{name}", r.requester_name ?? "—")
+                          .replace("{date}", formatDate(r.created_at))}
+                      </div>
+                      {r.message && (
+                        <p className="mt-1 italic text-slate-700">
+                          “{r.message}”
+                        </p>
+                      )}
+                    </div>
+                    <Link
+                      href={`/documents/${r.document_id}`}
+                      className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                    >
+                      {t("dashboard.decideOnDoc")}
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
