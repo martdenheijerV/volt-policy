@@ -42,8 +42,6 @@ export interface DocPageToastsLabels {
   // Review lock (approver — call to action)
   approverHeading: string;
   approverBodyTpl: string; // "You're reading v{n}. Approve to publish or reject."
-  // Auto translate
-  autoTranslatedTpl: string; // "Auto-translated {src} → {dst} via DeepL"
   dismiss: string;
 }
 
@@ -55,7 +53,6 @@ export default function DocPageToasts({
   reviewVersionNumber,
   approvedVersionNumber,
   pendingReview,
-  autoTranslate,
   labels,
 }: {
   documentId: string;
@@ -70,7 +67,6 @@ export default function DocPageToasts({
     authorName: string | null;
     changeSummary: string | null;
   } | null;
-  autoTranslate: { src: string; dst: string } | null;
   labels: DocPageToastsLabels;
 }) {
   const router = useRouter();
@@ -116,10 +112,8 @@ export default function DocPageToasts({
     pendingReview && isApprover && !dismissed.has("pending");
   const showReviewLock =
     status === "review" && !dismissed.has("review-lock");
-  const showAutoTranslate =
-    autoTranslate && !dismissed.has("auto-translate");
 
-  const anyVisible = showPending || showReviewLock || showAutoTranslate;
+  const anyVisible = showPending || showReviewLock;
   if (!anyVisible) return null;
 
   return (
@@ -260,32 +254,6 @@ export default function DocPageToasts({
               onClick={() => dismiss("review-lock")}
               aria-label={labels.dismiss}
               className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showAutoTranslate && autoTranslate && (
-        <div
-          role="status"
-          className="pointer-events-auto w-full rounded-lg border border-volt-200 bg-white p-3 shadow-lg"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="text-xs text-slate-700">
-              <span aria-hidden className="mr-1">
-                🌐
-              </span>
-              {labels.autoTranslatedTpl
-                .replace("{src}", autoTranslate.src.toUpperCase())
-                .replace("{dst}", autoTranslate.dst.toUpperCase())}
-            </div>
-            <button
-              type="button"
-              onClick={() => dismiss("auto-translate")}
-              aria-label={labels.dismiss}
-              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             >
               ✕
             </button>

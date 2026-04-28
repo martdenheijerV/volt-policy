@@ -18,8 +18,12 @@ import {
   getMyOpenRequestForDoc,
   getDocParticipants,
 } from "@/lib/db/edit-rights";
-import EditRightsPanel from "@/components/EditRightsPanel";
-import type { EditRightsPanelLabels } from "@/components/EditRightsPanel";
+// EditRightsPanel used to live as a big card below the editor. Replaced
+// by DocAccessControls in the page header — the same actions, but
+// inside a popover triggered from the people-icon next to the kebab.
+import DocAccessControls, {
+  type DocAccessControlsLabels,
+} from "@/components/DocAccessControls";
 import DeleteDocumentButton from "@/components/DeleteDocumentButton";
 import type { DeleteDocumentButtonLabels } from "@/components/DeleteDocumentButton";
 import DocOverflowMenu, {
@@ -304,27 +308,34 @@ export default async function DocumentPage({
         >
           ← <T>All documents</T>
         </Link>
-        <div className="flex items-center gap-3 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <span className="hidden text-xs text-slate-500 sm:inline">
             {docTypeLabel(doc.document_type)} · {doc.language.toUpperCase()}
             {doc.current_version > 0 && ` · v${doc.current_version}`}
           </span>
           <DocStatusPill status={doc.status} label={statusLabel} />
+          {/*
+            Compact access cluster: people indicator (with popover full
+            of participants + remove access for approvers + pending
+            requests with inline approve/reject) plus the edit-rights
+            state button (Request → Pending → Edit access).
+          */}
+          <DocAccessControls
+            documentId={doc.id}
+            currentUserId={user?.id ?? null}
+            currentUserCanEdit={canEdit}
+            isApprover={isApprover}
+            myOpenRequest={myOpenRequest}
+            pendingRequests={pendingRequests}
+            participants={participants}
+            labels={await buildAccessControlsLabels(tr)}
+          />
           <DocOverflowMenu
             items={overflowItems}
             ariaLabel={await tr("More document actions")}
           />
         </div>
       </div>
-
-      {doc.purpose && (
-        <p className="mb-4 text-sm italic text-slate-500 print:hidden">
-          <span className="font-medium not-italic text-slate-700">
-            <T>Purpose:</T>
-          </span>{" "}
-          {doc.purpose}
-        </p>
-      )}
 
       {/*
         Editor — the main event. Everything else on the page is small,
@@ -369,19 +380,6 @@ export default async function DocumentPage({
           />
         </div>
       )}
-
-      <div className="mt-6">
-        <EditRightsPanel
-          documentId={doc.id}
-          currentUserId={user?.id ?? null}
-          currentUserCanEdit={canEdit}
-          isApprover={isApprover}
-          myOpenRequest={myOpenRequest}
-          pendingRequests={pendingRequests}
-          participants={participants}
-          labels={await buildEditRightsLabels(tr)}
-        />
-      </div>
 
       {/*
         Danger zone — destructive action lives at the bottom, separated
@@ -441,11 +439,6 @@ export default async function DocumentPage({
                 changeSummary: pendingChangeSummary,
               }
             : null
-        }
-        autoTranslate={
-          rendered.isOriginal
-            ? null
-            : { src: rendered.sourceLanguage, dst: rendered.language }
         }
         labels={await buildToastsLabels(tr)}
       />
@@ -761,90 +754,85 @@ async function buildDeleteLabels(
   };
 }
 
-async function buildEditRightsLabels(
+async function buildAccessControlsLabels(
   tr: (s: string) => Promise<string>
-): Promise<EditRightsPanelLabels> {
+): Promise<DocAccessControlsLabels> {
   const [
-    panelHeading,
-    youAreInSuggestionMode,
-    requestEditRights,
-    requesting,
-    yourPendingRequest,
-    cancelRequest,
-    messagePlaceholder,
+    peopleAriaLabel,
+    whoHasAccessHeading,
+    ownerLabel,
+    canEdit,
+    canComment,
+    canApprove,
+    viaGroupTpl,
+    revoke,
+    promoteToEdit,
+    noOtherParticipants,
     pendingRequestsHeading,
-    noPendingRequests,
     approve,
     reject,
     decisionNotePlaceholder,
-    participantsHeading,
-    ownerLabel,
-    roleLabel,
-    accessLabel,
-    canEdit,
-    canComment,
-    canApproveLbl,
-    viaGroupTpl,
-    noOtherParticipants,
-    revoke,
+    requestEditRights,
+    pendingRequest,
+    editAccess,
+    cancelRequest,
+    requestHeading,
+    messagePlaceholder,
+    submit,
+    cancel,
+    busy,
     failed,
-    requestedAt,
-    decisionByTpl,
   ] = await Promise.all([
-    tr("Access & edit rights"),
-    tr(
-      "You're in suggestion mode. You can read and comment, but you need edit rights to type in the document."
-    ),
-    tr("Request edit rights"),
-    tr("Requesting…"),
-    tr("Your request is waiting for a decision."),
-    tr("Cancel request"),
-    tr("Why do you need edit rights? (optional)"),
-    tr("Pending requests"),
-    tr("No pending requests."),
-    tr("Approve"),
-    tr("Reject"),
-    tr("Reason (optional, kept in audit log)"),
+    tr("Who has access"),
     tr("Who has access"),
     tr("Owner"),
-    tr("Role"),
-    tr("Access"),
     tr("Edit"),
     tr("Comment"),
     tr("Approve"),
-    tr("via group {name}"),
-    tr("No participants yet — only the owner can edit so far."),
+    tr("via {name}"),
     tr("Revoke"),
+    tr("Grant edit"),
+    tr("Only the owner can edit so far."),
+    tr("Pending requests"),
+    tr("Approve"),
+    tr("Reject"),
+    tr("Reason (optional, kept in audit log)"),
+    tr("Request edit rights"),
+    tr("Pending request to edit"),
+    tr("Access to edit"),
+    tr("Cancel request"),
+    tr("Request edit rights"),
+    tr("Why do you need edit rights? (optional)"),
+    tr("Send request"),
+    tr("Cancel"),
+    tr("Busy…"),
     tr("Something went wrong."),
-    tr("Requested:"),
-    tr("by {name}"),
   ]);
   return {
-    panelHeading,
-    youAreInSuggestionMode,
-    requestEditRights,
-    requesting,
-    yourPendingRequest,
-    cancelRequest,
-    messagePlaceholder,
+    peopleAriaLabel,
+    whoHasAccessHeading,
+    ownerLabel,
+    canEdit,
+    canComment,
+    canApprove,
+    viaGroupTpl,
+    revoke,
+    promoteToEdit,
+    noOtherParticipants,
     pendingRequestsHeading,
-    noPendingRequests,
     approve,
     reject,
     decisionNotePlaceholder,
-    participantsHeading,
-    ownerLabel,
-    roleLabel,
-    accessLabel,
-    canEdit,
-    canComment,
-    canApprove: canApproveLbl,
-    viaGroupTpl,
-    noOtherParticipants,
-    revoke,
+    requestEditRights,
+    pendingRequest,
+    editAccess,
+    cancelRequest,
+    requestHeading,
+    messagePlaceholder,
+    submit,
+    cancel,
+    busy,
     failed,
-    requestedAt,
-    decisionByTpl,
   };
 }
 
@@ -866,7 +854,6 @@ async function buildToastsLabels(
     reviewLockedBodyTpl,
     approverHeading,
     approverBodyTpl,
-    autoTranslatedTpl,
     dismiss,
   ] = await Promise.all([
     tr("Changes pending approval"),
@@ -883,7 +870,6 @@ async function buildToastsLabels(
     tr("An admin is reviewing v{n}. Typing is locked for everyone."),
     tr("Awaiting your approval"),
     tr("You're reading frozen v{n}. Approve to publish or reject."),
-    tr("Auto-translated {src} → {dst} via DeepL"),
     tr("Dismiss"),
   ]);
   return {
@@ -901,7 +887,6 @@ async function buildToastsLabels(
     reviewLockedBodyTpl,
     approverHeading,
     approverBodyTpl,
-    autoTranslatedTpl,
     dismiss,
   };
 }
