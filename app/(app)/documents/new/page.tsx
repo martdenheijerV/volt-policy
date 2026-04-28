@@ -43,7 +43,7 @@ export default async function NewDocumentPage() {
     tr("Optional features"),
     tr("Enable citations / bibliography"),
     tr(
-      "Adds a Citations tab to the document. Use it when you want to formally reference sources with a [@cite_key] in the body and an auto-rendered bibliography on export. Most docs don't need this — leave off for plain hyperlink references."
+      "Adds a Citations tab to this document. After saving, open the document and find Citations in the ⋯ menu to add sources — then reference them in the body with [@cite_key]. Most docs don't need this; leave off for plain hyperlink references."
     ),
   ]);
 

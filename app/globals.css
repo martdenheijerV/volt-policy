@@ -86,57 +86,47 @@ body {
 }
 
 /*
- * A4-paper editor styling — gives the writing area the same "I'm
- * working on a printed page" feel as Google Docs / Pages. The
- * .editor-page wrapper paints a soft grey desk; the .editor-paper
- * inside it is the actual sheet with paper-style shadow and faint
- * page-break ruling.
+ * A4-paper editor styling — Google Docs feel: light blue-grey canvas,
+ * a single white A4 sheet centered with a clean drop-shadow. No fake
+ * page-break lines (ProseMirror doesn't paginate, so painting page
+ * boundaries was misleading). No card-in-card; the workspace area
+ * itself is the canvas.
  *
- * Width is 21cm (A4 portrait), min-height 29.7cm (one full page).
- * Content beyond the first page just keeps flowing — ProseMirror
- * doesn't paginate — but we paint horizontal lines at every 29.7cm
- * boundary so the editor still gets a visual sense of "this is
- * page 2".
- *
- * Print styles already handle the actual export — these styles only
- * affect the on-screen edit view.
+ * Print styles handle actual export — these only affect the edit view.
  */
 .editor-page {
-  background: #f1f3f5;
-  padding: 1.75rem 1rem;
-  border-top: 1px solid #e5e7eb;
+  /* Soft, slightly-cool canvas — close to Google Docs' #f9fbfd. */
+  background: #f8f9fc;
+  padding: 2.5rem 1rem 4rem;
+  border-radius: 6px;
 }
 .editor-paper {
   background: white;
   width: 100%;
-  max-width: 21cm;
+  max-width: 21cm; /* A4 portrait */
   margin: 0 auto;
   padding: 2.5cm 2cm;
+  /* Clean paper shadow: short ambient + soft drop. */
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.06),
-    0 6px 16px -4px rgba(0, 0, 0, 0.12);
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 8px 24px -8px rgba(15, 23, 42, 0.12);
   border-radius: 2px;
-  /* Faint horizontal ruling every 29.7cm of paper to suggest page breaks. */
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent calc(29.7cm - 1px),
-    rgba(0, 0, 0, 0.06) calc(29.7cm - 1px),
-    rgba(0, 0, 0, 0.06) 29.7cm
-  );
   min-height: 29.7cm;
 }
-/* Mobile / narrow screens: drop the strict A4 width, use full container. */
-@media (max-width: 800px) {
+/* Narrow screens: drop the strict A4, take available width, less padding. */
+@media (max-width: 900px) {
+  .editor-page {
+    padding: 1rem 0.25rem 2rem;
+  }
   .editor-paper {
-    padding: 1.25rem;
+    padding: 1.5rem 1.25rem;
     max-width: 100%;
-    background-image: none;
     min-height: 60vh;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04);
   }
 }
-/* The ProseMirror itself shouldn't add an extra layer of background or
-   constrain width; it lives inside the paper. */
+/* ProseMirror itself: no extra background, no extra constraint. */
 .editor-paper .ProseMirror {
   outline: none;
   min-height: 60vh;

@@ -349,9 +349,15 @@ export default function DocumentWorkspace({
           ⚡ {remoteToast}
         </div>
       )}
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      <div className="rounded-lg border bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      {/*
+        Editor area: no outer card, no double border. The workspace
+        toolbar sits on the canvas itself, then the .editor-page wraps
+        the actual paper. This avoids the "card-in-card" look where the
+        white workspace box contained a second white paper inside.
+      */}
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-1 pb-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -446,7 +452,7 @@ export default function DocumentWorkspace({
             even though the editor itself is locked.
           */}
           {(canEdit || canApprove || canArchive) && (
-            <div className="border-t px-5 py-4">
+            <div className="mt-4 border-t border-slate-200 px-1 pt-4">
               {/*
                 Autosave status indicator. Replaces the old
                 "Save new version" button — the editor saves continuously

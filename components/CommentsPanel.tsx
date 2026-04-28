@@ -179,7 +179,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     return (
       <aside
         ref={wrapperRef}
-        className="rounded-lg border bg-white p-4 shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto print:hidden"
+        className="rounded-lg bg-white/70 p-4 backdrop-blur lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto print:hidden"
       >
         <h2 className="text-lg font-semibold">{labels.comments}</h2>
 
