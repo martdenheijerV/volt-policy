@@ -62,6 +62,17 @@ export interface CommentsPanelLabels {
    * approved (locked). Falsy = don't render the notice.
    */
   approvedNotice?: string;
+  /**
+   * Header on the show-all-comments panel. Optional — falls back to
+   * `comments` when not provided so older callers keep working.
+   */
+  allCommentsTitle?: string;
+  /** Tooltip / aria-label on the "expand to full list" toggle. */
+  showAllComments?: string;
+  /** Tooltip / aria-label on the "back to inline floating cards" toggle. */
+  showInline?: string;
+  /** Empty state shown in the Resolved tab when there are no resolved comments. */
+  noResolved?: string;
 }
 
 interface Props {
@@ -103,25 +114,36 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     // when the form closes. null = let the form sit in normal flow
     // (e.g. for replies, which appear inside the parent thread card).
     const [composeTop, setComposeTop] = useState<number | null>(null);
+    // View mode: "anchored" = floating cards next to their text in the
+    // editor (default); "all" = stacked, scrollable list with tabs for
+    // Open/Resolved (Mart's Google-Docs-style sidebar request).
+    const [viewMode, setViewMode] = useState<"anchored" | "all">("anchored");
+    const [allFilter, setAllFilter] = useState<"open" | "resolved">("open");
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const wrapperRef = useRef<HTMLElement>(null);
 
     // Per-comment vertical offsets keyed by comment id. Filled in by an
-    // effect that measures each anchor element's position in the editor
-    // and pins the corresponding comment card at that height. Empty
-    // map = stack normally (no anchor / not measured yet).
+    // effect that:
+    //   1. measures each anchor's position in the editor,
+    //   2. sorts cards by anchor top,
+    //   3. applies gravity — pushes any card down if it would overlap
+    //      the previous card, using the actual rendered card heights.
+    // Empty map = stack normally (no anchor / not measured yet).
     const [tops, setTops] = useState<Record<string, number>>({});
     useEffect(() => {
+      // Anchor mode is the only one where we need to pin cards to
+      // measured offsets. In show-all mode cards stack in the natural
+      // flex flow of the scrollable list.
+      if (viewMode !== "anchored") return;
+
       function measure() {
         const wrapperBox = wrapperRef.current?.getBoundingClientRect();
         if (!wrapperBox) return;
-        const next: Record<string, number> = {};
-        // Anchors live in the editor's ProseMirror DOM as inline
-        // decorations carrying data-comment-id. Find each, compute its
-        // offset relative to the comments wrapper, and stash it.
+        // 1. Measure desired anchor tops (where each card *wants* to sit).
         const editorDom = document.querySelector(".paper-body-prose .ProseMirror");
         if (!editorDom) return;
         const seen = new Set<string>();
+        const desired: Array<{ id: string; top: number }> = [];
         editorDom
           .querySelectorAll<HTMLElement>("[data-comment-id]")
           .forEach((el) => {
@@ -129,20 +151,49 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
             if (!id || seen.has(id)) return;
             seen.add(id);
             const rect = el.getBoundingClientRect();
-            // Vertical offset of the anchor's top relative to the
-            // comments wrapper's top.
-            next[id] = rect.top - wrapperBox.top;
+            desired.push({ id, top: rect.top - wrapperBox.top });
           });
-        // Avoid setting state if nothing actually changed (saves a
-        // re-render on every scroll tick).
-        const changed =
-          Object.keys(next).length !== Object.keys(tops).length ||
-          Object.entries(next).some(([k, v]) => Math.abs((tops[k] ?? -9999) - v) > 1);
-        if (changed) setTops(next);
+
+        // 2. Read each card's actual height. Defaults to a sane estimate
+        //    when the card hasn't rendered yet (first paint).
+        const heights: Record<string, number> = {};
+        desired.forEach(({ id }) => {
+          const card = wrapperRef.current?.querySelector<HTMLElement>(
+            `[data-comment-card="${id}"]`
+          );
+          heights[id] = card?.offsetHeight ?? 96;
+        });
+
+        // 3. Apply gravity: sort by desired top, push down anything that
+        //    would overlap. GAP = breathing room between cards.
+        const GAP = 8;
+        desired.sort((a, b) => a.top - b.top);
+        const adjusted: Record<string, number> = {};
+        let cursor = 0;
+        for (const { id, top } of desired) {
+          const finalTop = Math.max(top, cursor);
+          adjusted[id] = finalTop;
+          cursor = finalTop + (heights[id] ?? 96) + GAP;
+        }
+
+        // 4. Skip the state update if nothing meaningful changed
+        //    (within 1px). Without this we'd thrash on every scroll.
+        setTops((prev) => {
+          const sameSize = Object.keys(adjusted).length === Object.keys(prev).length;
+          const sameValues =
+            sameSize &&
+            Object.entries(adjusted).every(
+              ([k, v]) => Math.abs((prev[k] ?? -9999) - v) <= 1
+            );
+          return sameValues ? prev : adjusted;
+        });
       }
+
+      // Initial measurement + a follow-up after the next frame so we
+      // catch heights of cards that just got re-rendered with new tops.
       measure();
-      // Re-measure on scroll + window resize. requestAnimationFrame
-      // throttles us to one measurement per frame.
+      const rafInitial = requestAnimationFrame(measure);
+
       let raf = 0;
       function onScroll() {
         cancelAnimationFrame(raf);
@@ -151,11 +202,12 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       window.addEventListener("scroll", onScroll, true);
       window.addEventListener("resize", onScroll);
       return () => {
+        cancelAnimationFrame(rafInitial);
         cancelAnimationFrame(raf);
         window.removeEventListener("scroll", onScroll, true);
         window.removeEventListener("resize", onScroll);
       };
-    }, [comments, tops]);
+    }, [comments, viewMode]);
 
     useImperativeHandle(ref, () => ({
       startComment(text: string, top?: number) {
@@ -165,6 +217,10 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         // Float the compose card next to the selection if a vertical
         // offset was passed; otherwise let it sit in normal flow.
         setComposeTop(top ?? null);
+        // If the user is in show-all mode and starts a new anchored
+        // comment, flip back to anchored view so the compose card
+        // appears next to the text.
+        setViewMode("anchored");
         requestAnimationFrame(() => {
           bodyRef.current?.focus();
         });
@@ -247,13 +303,167 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     */
     const composeOpen = !!anchor || !!replyTo;
 
+    // Show-all label fallbacks so older translations don't break the
+    // build. New strings live in lib/i18n/dictionaries.ts but the
+    // component needs to render gracefully if they're missing.
+    const allCommentsTitle = labels.allCommentsTitle ?? labels.comments;
+    const showAllLabel = labels.showAllComments ?? labels.allCommentsTitle ?? labels.comments;
+    const showInlineLabel = labels.showInline ?? labels.comments;
+    const noResolvedLabel = labels.noResolved ?? labels.noOpen;
+
+    // ---------- Show-all mode ----------
+    if (viewMode === "all") {
+      const list = allFilter === "open" ? open : resolved;
+      const emptyText = allFilter === "open" ? labels.noOpen : noResolvedLabel;
+      return (
+        <aside
+          ref={wrapperRef}
+          className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col rounded-lg border border-slate-200 bg-white shadow-md print:hidden"
+          aria-label={allCommentsTitle}
+        >
+          <header className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            <h2 className="text-sm font-semibold text-slate-800">
+              {allCommentsTitle}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setViewMode("anchored")}
+              aria-label={showInlineLabel}
+              title={showInlineLabel}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </header>
+          <div
+            role="tablist"
+            aria-label={allCommentsTitle}
+            className="flex border-b border-slate-200 px-3 pt-2 text-sm"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={allFilter === "open"}
+              onClick={() => setAllFilter("open")}
+              className={`-mb-px border-b-2 px-3 py-2 font-medium transition ${
+                allFilter === "open"
+                  ? "border-volt-600 text-volt-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              {labels.openTpl.replace("{n}", String(open.length))}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={allFilter === "resolved"}
+              onClick={() => setAllFilter("resolved")}
+              className={`-mb-px border-b-2 px-3 py-2 font-medium transition ${
+                allFilter === "resolved"
+                  ? "border-volt-600 text-volt-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              {labels.resolvedTpl.replace("{n}", String(resolved.length))}
+            </button>
+          </div>
+
+          {labels.approvedNotice && (
+            <p
+              role="note"
+              className="mx-3 mt-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800"
+            >
+              {labels.approvedNotice}
+            </p>
+          )}
+
+          <div
+            className="flex-1 overflow-y-auto px-3 py-3"
+            // Independent scroll: the user can wheel through this
+            // panel without making the document scroll. The page
+            // doesn't scroll because we capture wheel inside this
+            // overflowed container (browser default behaviour).
+          >
+            {list.length === 0 ? (
+              <p className="text-sm text-slate-500">{emptyText}</p>
+            ) : (
+              <ul className={`space-y-3 ${allFilter === "resolved" ? "opacity-70" : ""}`}>
+                {list.map((c) => (
+                  <CommentThread
+                    key={c.id}
+                    top={c}
+                    replies={tree.byParent.get(c.id) ?? []}
+                    onToggle={toggleResolved}
+                    currentUserId={currentUserId}
+                    isActive={activeCommentId === c.id}
+                    onAnchorClick={onAnchorClick}
+                    onReply={startReply}
+                    labels={labels}
+                    anchorOffset={null}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+      );
+    }
+
+    // ---------- Anchored (default) mode ----------
     return (
       <aside
         ref={wrapperRef}
         className="relative bg-transparent print:hidden"
       >
-        {/* Header removed per Mart's request — the "Reacties" heading
-            and the always-visible compose form used to live here. */}
+        {/*
+          Floating "Show all comments" pill — sits above the first
+          floating card. Clicking flips the panel into the scrollable
+          tabs view.
+        */}
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setViewMode("all")}
+            aria-label={showAllLabel}
+            title={showAllLabel}
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+            {showAllLabel}
+            {open.length + resolved.length > 0 && (
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                {open.length + resolved.length}
+              </span>
+            )}
+          </button>
+        </div>
 
         {labels.approvedNotice && (
           <p
@@ -371,7 +581,8 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
 
         <div className="mt-1">
           {/* "Open (n)" header removed — anchored cards float at the
-              text they refer to, so a count header would be redundant. */}
+              text they refer to, so a count header would be redundant.
+              The "Show all comments" pill at the top exposes counts. */}
           {/*
             Position relative so individual comment threads can float
             at their anchor's vertical offset (when anchorOffset is
@@ -402,30 +613,6 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
             ))}
           </ul>
         </div>
-
-        {resolved.length > 0 && (
-          <div className="mt-5">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {labels.resolvedTpl.replace("{n}", String(resolved.length))}
-            </h3>
-            <ul className="mt-2 space-y-3 opacity-60">
-              {resolved.map((c) => (
-                <CommentThread
-                  key={c.id}
-                  top={c}
-                  anchorOffset={null}
-                  replies={tree.byParent.get(c.id) ?? []}
-                  onToggle={toggleResolved}
-                  currentUserId={currentUserId}
-                  isActive={activeCommentId === c.id}
-                  onAnchorClick={onAnchorClick}
-                  onReply={startReply}
-                  labels={labels}
-                />
-              ))}
-            </ul>
-          </div>
-        )}
       </aside>
     );
   }

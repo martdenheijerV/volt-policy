@@ -569,6 +569,10 @@ async function buildCommentsLabels(
     unknown,
     failedToAdd,
     failedToUpdate,
+    allCommentsTitle,
+    showAllComments,
+    showInline,
+    noResolved,
   ] = await Promise.all([
     tr("Comments"),
     tr("Sign in to leave a comment."),
@@ -599,6 +603,10 @@ async function buildCommentsLabels(
     tr("Unknown"),
     tr("Failed to add comment."),
     tr("Failed to update."),
+    tr("All comments"),
+    tr("Show all comments"),
+    tr("Back to inline"),
+    tr("No resolved comments."),
   ]);
   return {
     comments,
@@ -630,6 +638,10 @@ async function buildCommentsLabels(
     unknown,
     failedToAdd,
     failedToUpdate,
+    allCommentsTitle,
+    showAllComments,
+    showInline,
+    noResolved,
     // Only emit the approved-notice for status='approved'. Other
     // statuses get undefined → CommentsPanel skips the notice block.
     approvedNotice:
