@@ -18,6 +18,7 @@ import AIPanel, { type AIPanelLabels } from "./AIPanel";
 import DeleteDocumentButton, {
   type DeleteDocumentButtonLabels,
 } from "./DeleteDocumentButton";
+import EditorActionFloat from "./EditorActionFloat";
 import { autosaveDraft, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
@@ -163,6 +164,9 @@ export default function DocumentWorkspace({
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  // AI panel can be hidden for distraction-free editing; the floating
+  // action icons toggle it.
+  const [aiOpen, setAiOpen] = useState(true);
   const commentsRef = useRef<CommentsPanelHandle>(null);
   const editorRef = useRef<RichTextEditorHandle>(null);
 
@@ -349,13 +353,15 @@ export default function DocumentWorkspace({
           ⚡ {remoteToast}
         </div>
       )}
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       {/*
-        Editor area: no outer card, no double border. The workspace
-        toolbar sits on the canvas itself, then the .editor-page wraps
-        the actual paper. This avoids the "card-in-card" look where the
-        white workspace box contained a second white paper inside.
+        editor-canvas wraps the whole workspace — toolbar, paper, AND
+        the comments/AI sidebar. That way the grey canvas extends edge
+        to edge instead of stopping at the column boundary (Mart's
+        "verticale lijn" complaint). The paper is the only white card;
+        the sidebar floats on the canvas with a translucent backdrop.
       */}
+      <div className="editor-canvas">
+      <div className="grid gap-3 lg:grid-cols-[1fr_auto_300px]">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-1 pb-3">
           <div className="flex items-center gap-2">
@@ -636,6 +642,21 @@ export default function DocumentWorkspace({
         )}
       </div>
 
+      {/*
+        Floating action icons in the canvas margin between paper and
+        sidebar — comment / emoji / AI toggle, à la Google Docs.
+      */}
+      <EditorActionFloat
+        onAddComment={() => commentsRef.current?.startComment("")}
+        onToggleAi={() => setAiOpen((v) => !v)}
+        aiOpen={aiOpen}
+        labels={{
+          addComment: commentsLabels.comments,
+          reactWithEmoji: "Emoji reaction (coming soon)",
+          toggleAi: aiLabels.heading,
+        }}
+      />
+
       <div className="flex flex-col gap-4">
         <CommentsPanel
           ref={commentsRef}
@@ -647,12 +668,15 @@ export default function DocumentWorkspace({
           onCommentsChanged={handleLocalCommentsChanged}
           labels={commentsLabels}
         />
-        <AIPanel
-          documentId={documentId}
-          contentHtml={contentHtml}
-          language={language}
-          labels={aiLabels}
-        />
+        {aiOpen && (
+          <AIPanel
+            documentId={documentId}
+            contentHtml={contentHtml}
+            language={language}
+            labels={aiLabels}
+          />
+        )}
+      </div>
       </div>
       </div>
     </div>

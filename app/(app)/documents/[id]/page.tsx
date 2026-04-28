@@ -293,7 +293,7 @@ export default async function DocumentPage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-7xl">
       {/*
         Header strip — single line with everything content-adjacent. No
         button row, no banners, no purpose-card-block. The kebab on the
