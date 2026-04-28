@@ -47,24 +47,30 @@ function buildDecorations(
   for (const a of anchors) {
     if (!a.quote) continue;
     const needle = a.quote;
-    let i = 0;
-    let safety = 0;
-    while (safety++ < 1000) {
-      const idx = flat.indexOf(needle, i);
-      if (idx === -1) break;
-      const start = map[idx];
-      const endIdx = idx + needle.length - 1;
-      if (endIdx >= map.length) break;
-      const end = map[endIdx] + 1;
-      decos.push(
-        Decoration.inline(start, end, {
-          class: "anchor-highlight",
-          "data-comment-id": a.id,
-        })
-      );
-      hits.push({ id: a.id, from: start, to: end });
-      i = idx + needle.length;
-    }
+    // Skip very short anchors entirely — they match too aggressively
+    // ("e", "te", "Hee" etc. would highlight half the document). The
+    // floating-comment UX assumes one card per unique anchor quote;
+    // sub-8-char quotes are usually accidental clicks anyway.
+    if (needle.trim().length < 8) continue;
+    // Highlight ONLY the first occurrence. Earlier we matched every
+    // copy of the quote text, which painted yellow over the entire
+    // doc when the quote was a repeated word (Mart's bug report:
+    // "HeeHeeHee..." selection turning the whole page yellow).
+    // For multi-occurrence support we'd need to store position
+    // offsets in the DB; that's a separate refactor.
+    const idx = flat.indexOf(needle);
+    if (idx === -1) continue;
+    const start = map[idx];
+    const endIdx = idx + needle.length - 1;
+    if (endIdx >= map.length) continue;
+    const end = map[endIdx] + 1;
+    decos.push(
+      Decoration.inline(start, end, {
+        class: "anchor-highlight",
+        "data-comment-id": a.id,
+      })
+    );
+    hits.push({ id: a.id, from: start, to: end });
   }
 
   if (flashRange) {
