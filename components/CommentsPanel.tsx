@@ -2,6 +2,7 @@
 
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -86,12 +87,63 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
   ) {
     const [body, setBody] = useState("");
     const [anchor, setAnchor] = useState("");
-    const [kind, setKind] = useState<CommentKind>("general");
+    const [kind] = useState<CommentKind>("general");
     const [pending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
     const [replyTo, setReplyTo] = useState<string | null>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const wrapperRef = useRef<HTMLElement>(null);
+
+    // Per-comment vertical offsets keyed by comment id. Filled in by an
+    // effect that measures each anchor element's position in the editor
+    // and pins the corresponding comment card at that height. Empty
+    // map = stack normally (no anchor / not measured yet).
+    const [tops, setTops] = useState<Record<string, number>>({});
+    useEffect(() => {
+      function measure() {
+        const wrapperBox = wrapperRef.current?.getBoundingClientRect();
+        if (!wrapperBox) return;
+        const next: Record<string, number> = {};
+        // Anchors live in the editor's ProseMirror DOM as inline
+        // decorations carrying data-comment-id. Find each, compute its
+        // offset relative to the comments wrapper, and stash it.
+        const editorDom = document.querySelector(".paper-body-prose .ProseMirror");
+        if (!editorDom) return;
+        const seen = new Set<string>();
+        editorDom
+          .querySelectorAll<HTMLElement>("[data-comment-id]")
+          .forEach((el) => {
+            const id = el.getAttribute("data-comment-id");
+            if (!id || seen.has(id)) return;
+            seen.add(id);
+            const rect = el.getBoundingClientRect();
+            // Vertical offset of the anchor's top relative to the
+            // comments wrapper's top.
+            next[id] = rect.top - wrapperBox.top;
+          });
+        // Avoid setting state if nothing actually changed (saves a
+        // re-render on every scroll tick).
+        const changed =
+          Object.keys(next).length !== Object.keys(tops).length ||
+          Object.entries(next).some(([k, v]) => Math.abs((tops[k] ?? -9999) - v) > 1);
+        if (changed) setTops(next);
+      }
+      measure();
+      // Re-measure on scroll + window resize. requestAnimationFrame
+      // throttles us to one measurement per frame.
+      let raf = 0;
+      function onScroll() {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(measure);
+      }
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onScroll);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("scroll", onScroll, true);
+        window.removeEventListener("resize", onScroll);
+      };
+    }, [comments, tops]);
 
     useImperativeHandle(ref, () => ({
       startComment(text: string) {
@@ -129,7 +181,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           setBody("");
           setAnchor("");
           setReplyTo(null);
-          setKind("general");
+          // kind is fixed at "general" now — no setter needed.
           // Tell other clients to refresh their comment list. The
           // server action's revalidatePath only ever reaches *this*
           // browser; this Y.Doc ping reaches everyone else in the
@@ -239,20 +291,14 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
               <p className="text-xs text-slate-500">{labels.selectTextHint}</p>
             )}
 
-            <div className="flex items-center gap-2 text-xs">
-              <label className="text-slate-500">{labels.type}</label>
-              <select
-                value={kind}
-                onChange={(e) => setKind(e.target.value as CommentKind)}
-                disabled={!!replyTo}
-                className="rounded border border-slate-300 px-2 py-1"
-                aria-label={labels.commentKind}
-              >
-                <option value="general">{labels.kindGeneral}</option>
-                <option value="review">{labels.kindReview}</option>
-                <option value="suggestion">{labels.kindSuggestion}</option>
-              </select>
-            </div>
+            {/*
+              Type selector (general / review / suggestion) intentionally
+              hidden — comments are now just plain comments. The kind is
+              still tracked in the DB (existing rows + new ones default
+              to 'general') so we can resurface it later as a quick
+              labeling action on individual comments. Mart's request:
+              "Dat mogen gewoon de reacties zijn".
+            */}
 
             <textarea
               ref={bodyRef}
@@ -296,7 +342,17 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             {labels.openTpl.replace("{n}", String(open.length))}
           </h3>
-          <ul className="mt-2 space-y-3">
+          {/*
+            Position relative so individual comment threads can float
+            at their anchor's vertical offset (when anchorOffset is
+            non-null). Threads without an anchor stay in normal flow.
+            The min-height grows with the editor so absolutely-positioned
+            cards always fit somewhere reachable.
+          */}
+          <ul
+            className="relative mt-2 space-y-3"
+            style={{ minHeight: 200 }}
+          >
             {open.length === 0 && (
               <li className="text-sm text-slate-500">{labels.noOpen}</li>
             )}
@@ -311,6 +367,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 onAnchorClick={onAnchorClick}
                 onReply={startReply}
                 labels={labels}
+                anchorOffset={tops[c.id] ?? null}
               />
             ))}
           </ul>
@@ -326,6 +383,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 <CommentThread
                   key={c.id}
                   top={c}
+                  anchorOffset={null}
                   replies={tree.byParent.get(c.id) ?? []}
                   onToggle={toggleResolved}
                   currentUserId={currentUserId}
@@ -352,6 +410,7 @@ function CommentThread({
   onAnchorClick,
   onReply,
   labels,
+  anchorOffset,
 }: {
   top: Comment;
   replies: Comment[];
@@ -361,6 +420,10 @@ function CommentThread({
   onAnchorClick?: (commentId: string) => void;
   onReply: (id: string) => void;
   labels: CommentsPanelLabels;
+  /** Vertical offset (px) where this comment's anchor sits in the
+      editor. When non-null we float the card to that height; when
+      null we let it sit in normal flow. */
+  anchorOffset: number | null;
 }) {
   const hasAnchor = !!top.anchor_quote;
   const handleJump = () => {
@@ -370,6 +433,11 @@ function CommentThread({
   return (
     <li
       data-comment-card={top.id}
+      style={
+        anchorOffset !== null
+          ? { position: "absolute", top: anchorOffset, left: 0, right: 0 }
+          : undefined
+      }
       className={[
         "rounded border p-3 text-sm transition",
         isActive

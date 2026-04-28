@@ -354,13 +354,10 @@ export default function DocumentWorkspace({
         </div>
       )}
       {/*
-        editor-canvas wraps the whole workspace — toolbar, paper, AND
-        the comments/AI sidebar. That way the grey canvas extends edge
-        to edge instead of stopping at the column boundary (Mart's
-        "verticale lijn" complaint). The paper is the only white card;
-        the sidebar floats on the canvas with a translucent backdrop.
+        No grey canvas — the paper sits directly on the body
+        background with a small drop-shadow. Comments float beside
+        the paper at anchor heights instead of in a fixed sidebar.
       */}
-      <div className="editor-canvas">
       <div className="grid gap-3 lg:grid-cols-[1fr_auto_300px]">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-1 pb-3">
@@ -404,26 +401,33 @@ export default function DocumentWorkspace({
 
         {/* Editor stays mounted across view toggles to preserve cursor + content */}
         <div className={view === "edit" ? "" : "hidden"}>
-          {/*
-            A4-paper styling: the .editor-page wrapper paints a soft
-            grey "desk" behind the editor, and .editor-paper renders
-            the actual writing surface as a white card with paper-style
-            shadow + a faint horizontal rule every ~A4-height to hint
-            at page breaks. Inspired by Google Docs.
-          */}
-          <div className="editor-page">
-            <div className="editor-paper">
-              <label htmlFor="doc-title" className="sr-only">
-                {labels.title}
-              </label>
-              <input
-                id="doc-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={!canEdit}
-                placeholder={labels.title}
-                className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
-              />
+          <div className="editor-paper">
+            {/*
+              Title + Tiptap toolbar — combined sticky header so they
+              stay glued to the top of the viewport while the user
+              scrolls long content. Tiptap renders its toolbar inside
+              the editor; we wrap it via CSS so the whole header sticks
+              as one unit.
+            */}
+            <div className="paper-sticky-header">
+              <div className="paper-title">
+                <label htmlFor="doc-title" className="sr-only">
+                  {labels.title}
+                </label>
+                <input
+                  id="doc-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  disabled={!canEdit}
+                  placeholder={labels.title}
+                  className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
+                />
+              </div>
+              {/* Tiptap toolbar will render itself inside the editor
+                  below; we let it dock into this header via the
+                  prose-mirror-wrapper rule. */}
+            </div>
+            <div className="paper-body-prose">
               <RichTextEditor
             ref={editorRef}
             initialContent={initialContent}
@@ -455,7 +459,8 @@ export default function DocumentWorkspace({
           {/*
             Action bar visibility split from canEdit so approvers (admin /
             policy_lead) can still see Approve/Reject during status='review'
-            even though the editor itself is locked.
+            even though the editor itself is locked. Outside the paper —
+            sits on the page background.
           */}
           {(canEdit || canApprove || canArchive) && (
             <div className="mt-4 border-t border-slate-200 px-1 pt-4">
@@ -676,7 +681,6 @@ export default function DocumentWorkspace({
             labels={aiLabels}
           />
         )}
-      </div>
       </div>
       </div>
     </div>
