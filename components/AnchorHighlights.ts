@@ -44,33 +44,38 @@ function buildDecorations(
     }
   });
 
+  // Per-anchor cap so a generic quote like "Hee" or "the" can't paint
+  // half the document yellow (Mart's bug report — selecting a
+  // repeated word turned the whole page into a highlight). Anchors
+  // that match more than this cap likely point at a generic word,
+  // not the specific spot the user meant; we silently truncate rather
+  // than show 50 highlights.
+  const MAX_HITS_PER_ANCHOR = 3;
+
   for (const a of anchors) {
     if (!a.quote) continue;
     const needle = a.quote;
-    // Skip very short anchors entirely — they match too aggressively
-    // ("e", "te", "Hee" etc. would highlight half the document). The
-    // floating-comment UX assumes one card per unique anchor quote;
-    // sub-8-char quotes are usually accidental clicks anyway.
-    if (needle.trim().length < 8) continue;
-    // Highlight ONLY the first occurrence. Earlier we matched every
-    // copy of the quote text, which painted yellow over the entire
-    // doc when the quote was a repeated word (Mart's bug report:
-    // "HeeHeeHee..." selection turning the whole page yellow).
-    // For multi-occurrence support we'd need to store position
-    // offsets in the DB; that's a separate refactor.
-    const idx = flat.indexOf(needle);
-    if (idx === -1) continue;
-    const start = map[idx];
-    const endIdx = idx + needle.length - 1;
-    if (endIdx >= map.length) continue;
-    const end = map[endIdx] + 1;
-    decos.push(
-      Decoration.inline(start, end, {
-        class: "anchor-highlight",
-        "data-comment-id": a.id,
-      })
-    );
-    hits.push({ id: a.id, from: start, to: end });
+    let i = 0;
+    let matchesForThisAnchor = 0;
+    let safety = 0;
+    while (safety++ < 1000) {
+      const idx = flat.indexOf(needle, i);
+      if (idx === -1) break;
+      const start = map[idx];
+      const endIdx = idx + needle.length - 1;
+      if (endIdx >= map.length) break;
+      const end = map[endIdx] + 1;
+      decos.push(
+        Decoration.inline(start, end, {
+          class: "anchor-highlight",
+          "data-comment-id": a.id,
+        })
+      );
+      hits.push({ id: a.id, from: start, to: end });
+      i = idx + needle.length;
+      matchesForThisAnchor += 1;
+      if (matchesForThisAnchor >= MAX_HITS_PER_ANCHOR) break;
+    }
   }
 
   if (flashRange) {
