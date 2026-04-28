@@ -18,6 +18,8 @@ import {
 } from "@/lib/db/edit-rights";
 import EditRightsPanel from "@/components/EditRightsPanel";
 import type { EditRightsPanelLabels } from "@/components/EditRightsPanel";
+import DeleteDocumentButton from "@/components/DeleteDocumentButton";
+import type { DeleteDocumentButtonLabels } from "@/components/DeleteDocumentButton";
 import type { Comment, Document, Profile } from "@/lib/types";
 import type { DocumentWorkspaceLabels } from "@/components/DocumentWorkspace";
 import type { CommentsPanelLabels } from "@/components/CommentsPanel";
@@ -300,6 +302,20 @@ export default async function DocumentPage({
           >
             .docx
           </a>
+          {/*
+            Destructive action lives at the very end of the toolbar so
+            it doesn't sit between everyday navigation buttons. Visible
+            to the same people who can re-open / approve / reject this
+            doc — admins, owner, scoped policy_lead. Type-to-confirm
+            inside the modal blocks misclicks.
+          */}
+          {isApprover && (
+            <DeleteDocumentButton
+              documentId={doc.id}
+              documentTitle={doc.title}
+              labels={await buildDeleteLabels(tr)}
+            />
+          )}
         </div>
       </div>
 
@@ -752,6 +768,42 @@ async function buildMetadataLabels(
     tr("Failed"),
   ]);
   return { metadata, failed };
+}
+
+async function buildDeleteLabels(
+  tr: (s: string) => Promise<string>
+): Promise<DeleteDocumentButtonLabels> {
+  const [
+    deleteLbl,
+    confirmTitle,
+    confirmBodyTpl,
+    typedPlaceholderTpl,
+    confirmDelete,
+    deleting,
+    cancel,
+    failed,
+  ] = await Promise.all([
+    tr("Delete document"),
+    tr("Delete this document?"),
+    tr(
+      "This will permanently remove “{title}” and everything attached to it (all versions, comments, amendments, translations, metadata). This cannot be undone."
+    ),
+    tr("Type {title} to confirm"),
+    tr("Permanently delete"),
+    tr("Deleting…"),
+    tr("Cancel"),
+    tr("Couldn't delete the document."),
+  ]);
+  return {
+    delete: deleteLbl,
+    confirmTitle,
+    confirmBodyTpl,
+    typedPlaceholderTpl,
+    confirmDelete,
+    deleting,
+    cancel,
+    failed,
+  };
 }
 
 async function buildEditRightsLabels(

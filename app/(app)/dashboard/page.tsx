@@ -150,6 +150,51 @@ export default async function DashboardPage() {
     }
   }
 
+  // "Te reviewen" inbox: documents currently in status='review' that
+  // this user can approve. Admin sees all; the doc owner sees their
+  // own; policy_lead sees the ones their group permission rules allow.
+  // Resolved server-side per-row by calling can_approve_doc — small
+  // queue so the per-row call is cheap.
+  let toReview: {
+    id: string;
+    title: string;
+    document_type: string;
+    review_version_number: number | null;
+    pending_change_summary: string | null;
+    updated_at: string;
+  }[] = [];
+  if (userId) {
+    try {
+      toReview = await withUser(userId, async (sql) => {
+        return await sql<{
+          id: string;
+          title: string;
+          document_type: string;
+          review_version_number: number | null;
+          pending_change_summary: string | null;
+          updated_at: string;
+        }[]>`
+          select d.id,
+                 d.title,
+                 d.document_type::text,
+                 d.review_version_number,
+                 d.pending_change_summary,
+                 d.updated_at
+            from public.documents d
+           where d.status = 'review'
+             and (
+               coalesce((select role = 'admin' from public.profiles where id = ${userId}), false)
+               or d.owner_id = ${userId}
+               or public.can_approve_doc(d.id)
+             )
+           order by d.updated_at desc
+        `;
+      });
+    } catch {
+      toReview = [];
+    }
+  }
+
   const { data: recent } = await supabase
     .from("documents")
     .select("*")
@@ -443,28 +488,93 @@ export default async function DashboardPage() {
       </div>
 
       {/*
-        Approver inbox: edit-rights requests waiting on this user's
-        decision. RLS already restricts the query to rows this user can
-        actually decide (admin OR doc owner OR can_approve_doc), so we
-        just render whatever came back. Each row links into the document
-        where the EditRightsPanel exposes the approve/reject buttons —
-        keeping the decision context (the doc itself) one click away.
+        Approver inboxes — two separate streams that approvers care
+        about, both shown side-by-side for consistency:
+
+         * "Te reviewen" — documents in status='review' that this user
+           can approve. Click → the doc, where Approve / Reject lives.
+
+         * "Aanvragen die op jouw beslissing wachten" — edit-rights
+           requests this user can decide.
+
+        Both are always rendered (with an empty state) so the user
+        sees these queues exist even when nothing's waiting.
       */}
-      {incomingRequests.length > 0 && (
-        <div className="mt-10">
-          <section
-            aria-labelledby="incoming-heading"
-            className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+      <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <section
+          aria-labelledby="to-review-heading"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+        >
+          <h2
+            id="to-review-heading"
+            className="text-xl font-semibold text-amber-900"
           >
-            <h2
-              id="incoming-heading"
-              className="text-xl font-semibold text-amber-900"
-            >
-              {t("dashboard.incomingRequestsHeading")}
-            </h2>
-            <p className="mt-1 text-sm text-amber-800">
-              {t("dashboard.incomingRequestsSubtitle")}
-            </p>
+            {t("dashboard.toReviewHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            {t("dashboard.toReviewSubtitle")}
+          </p>
+          {toReview.length === 0 ? (
+            <div className="mt-4 rounded border border-dashed border-amber-300 bg-white p-4 text-sm text-slate-500">
+              {t("dashboard.toReviewEmpty")}
+            </div>
+          ) : (
+            <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
+              {toReview.map((d) => (
+                <li key={d.id} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/documents/${d.id}`}
+                        className="font-medium text-volt-700 hover:underline"
+                      >
+                        {d.title}
+                      </Link>
+                      <div className="text-xs text-slate-600">
+                        {docTypeLabel(d.document_type)}
+                        {d.review_version_number
+                          ? ` · v${d.review_version_number}`
+                          : ""}
+                        {" · "}
+                        {t("dashboard.updated")} {formatDate(d.updated_at)}
+                      </div>
+                      {d.pending_change_summary && (
+                        <p className="mt-1 italic text-slate-700">
+                          “{d.pending_change_summary}”
+                        </p>
+                      )}
+                    </div>
+                    <Link
+                      href={`/documents/${d.id}`}
+                      className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                    >
+                      {t("dashboard.openForReview")}
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section
+          aria-labelledby="incoming-heading"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+        >
+          <h2
+            id="incoming-heading"
+            className="text-xl font-semibold text-amber-900"
+          >
+            {t("dashboard.incomingRequestsHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            {t("dashboard.incomingRequestsSubtitle")}
+          </p>
+          {incomingRequests.length === 0 ? (
+            <div className="mt-4 rounded border border-dashed border-amber-300 bg-white p-4 text-sm text-slate-500">
+              {t("dashboard.incomingRequestsEmpty")}
+            </div>
+          ) : (
             <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
               {incomingRequests.map((r) => (
                 <li key={r.id} className="px-4 py-3 text-sm">
@@ -497,9 +607,9 @@ export default async function DashboardPage() {
                 </li>
               ))}
             </ul>
-          </section>
-        </div>
-      )}
+          )}
+        </section>
+      </div>
     </div>
   );
 }

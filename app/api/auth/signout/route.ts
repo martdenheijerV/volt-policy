@@ -4,54 +4,65 @@ import { getCookieConfig } from "@/lib/auth/config";
 import { buildEndSessionUrl } from "@/lib/auth/oidc";
 
 /**
- * Sign out flow:
+ * Sign-out flow.
  *
- *  1. Clear our local session cookie. From this point our middleware
- *     treats the user as anonymous.
+ * Two modes:
  *
- *  2. Redirect the browser to Authentik's `end_session_endpoint` so the
- *     user's IdP session is also killed. Without this step, clicking
- *     "Sign in with Volt Auth" on the login page would silently log
- *     the same user back in via the still-valid SSO cookie — which is
- *     surprising and not what "log me out" should mean.
+ *  1. **Local-only logout (default).**
+ *     We clear our own session cookie and redirect the browser straight
+ *     to the app's homepage. Authentik's SSO session keeps living on
+ *     the IdP, so clicking "Sign in with Volt Auth" again will succeed
+ *     silently — same UX as Google Workspace, Slack, Linear, etc. when
+ *     you "log out". This is the pragmatic choice: it always lands the
+ *     user on a working page, doesn't require any Authentik
+ *     configuration, and "log out of this app" is what the button label
+ *     promises.
  *
- *  3. Authentik then redirects to `post_logout_redirect_uri`, which we
- *     point at the app's homepage (`/`). End state: cleanly anonymous,
- *     parked on a public page.
+ *  2. **Full RP-initiated logout** (opt-in via `OIDC_END_SESSION_ENABLED=1`).
+ *     We additionally redirect the browser through Authentik's
+ *     `end_session_endpoint` so the IdP session is killed too. This
+ *     only works after `https://policy.voltmaastricht.nl/` has been
+ *     registered as a *post-logout redirect URI* on the Volt Auth
+ *     provider — otherwise Authentik refuses the redirect and parks
+ *     the user on its own homepage. Toggle this on once that
+ *     configuration is in place.
  *
- *  4. If discovery doesn't expose `end_session_endpoint` (older IdP, or
- *     local dev with placeholders) we fall back to redirecting to `/`
- *     directly. The local cookie is already gone, which is the best we
- *     can do.
- *
- * Both POST (form submit from the nav signout button) and GET (direct
- * navigation, e.g. when an action handler hands us a Location) are
- * supported so a stray bookmarked link doesn't 405.
+ * In both modes the cookie is cleared first, so the very next page
+ * load on this app treats the user as anonymous regardless of what
+ * Authentik does.
  */
 async function signOut(request: Request) {
   const cookieStore = await cookies();
   const cfg = getCookieConfig();
   cookieStore.delete(cfg.name);
 
-  // Where to send the user after logout. Production points at the
-  // public marketing/landing site; in dev/staging we fall back to the
-  // request origin so this still works locally without env tweaks.
+  // Where to land. Production points at the public app entrypoint;
+  // dev/staging fall back to the request origin so this still works
+  // locally without env tweaks.
   const homepage = process.env.APP_HOME_URL?.trim()
     ? process.env.APP_HOME_URL.trim()
     : process.env.NODE_ENV === "production"
     ? "https://policy.voltmaastricht.nl/"
     : `${new URL(request.url).origin}/`;
 
+  // Default = local-only logout. Skip the Authentik round-trip unless
+  // explicitly enabled. Saves a redirect, removes a configuration
+  // dependency, and crucially: it always works.
+  if (process.env.OIDC_END_SESSION_ENABLED !== "1") {
+    return NextResponse.redirect(homepage, { status: 303 });
+  }
+
+  // Opt-in: RP-initiated logout via Authentik.
   let target = homepage;
   try {
     const endSession = await buildEndSessionUrl(homepage);
     if (endSession) target = endSession;
   } catch {
-    // OIDC misconfigured (placeholder env vars in dev). Falling back to
-    // a plain local redirect is correct: the cookie is already cleared.
+    // OIDC misconfigured (placeholder env vars, network blip, etc.).
+    // The local cookie is already cleared so we just send the user
+    // to the homepage.
     target = homepage;
   }
-
   return NextResponse.redirect(target, { status: 303 });
 }
 

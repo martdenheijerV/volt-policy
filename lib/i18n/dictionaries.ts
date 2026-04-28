@@ -95,8 +95,13 @@ const en: Dict = {
   "dashboard.verbApprove": "approve",
   "dashboard.incomingRequestsHeading": "Edit-rights requests waiting on you",
   "dashboard.incomingRequestsSubtitle": "Decide on these requests so collaborators can start typing.",
+  "dashboard.incomingRequestsEmpty": "No edit-rights requests waiting.",
   "dashboard.incomingRequestRowTpl": "{name} · requested {date}",
   "dashboard.decideOnDoc": "Decide on document",
+  "dashboard.toReviewHeading": "Documents waiting for your review",
+  "dashboard.toReviewSubtitle": "Documents in review that you can approve or reject.",
+  "dashboard.toReviewEmpty": "Nothing in review for you right now.",
+  "dashboard.openForReview": "Open for review",
 };
 
 const nl: Dict = {
@@ -182,8 +187,13 @@ const nl: Dict = {
   "dashboard.verbApprove": "goedkeuren",
   "dashboard.incomingRequestsHeading": "Aanvragen die op jouw beslissing wachten",
   "dashboard.incomingRequestsSubtitle": "Beslis op deze aanvragen zodat collega's kunnen gaan typen.",
+  "dashboard.incomingRequestsEmpty": "Geen openstaande aanvragen voor edit-rechten.",
   "dashboard.incomingRequestRowTpl": "{name} · aangevraagd {date}",
   "dashboard.decideOnDoc": "Beslis op document",
+  "dashboard.toReviewHeading": "Documenten die op jouw review wachten",
+  "dashboard.toReviewSubtitle": "Documenten in review die jij kunt goedkeuren of afwijzen.",
+  "dashboard.toReviewEmpty": "Niks in review op dit moment.",
+  "dashboard.openForReview": "Open voor review",
 };
 
 const de: Dict = {
@@ -269,8 +279,13 @@ const de: Dict = {
   "dashboard.verbApprove": "freigeben",
   "dashboard.incomingRequestsHeading": "Anfragen, die auf deine Entscheidung warten",
   "dashboard.incomingRequestsSubtitle": "Entscheide über diese Anfragen, damit andere mit dem Tippen beginnen können.",
+  "dashboard.incomingRequestsEmpty": "Keine offenen Anfragen für Bearbeitungsrechte.",
   "dashboard.incomingRequestRowTpl": "{name} · angefragt {date}",
   "dashboard.decideOnDoc": "Im Dokument entscheiden",
+  "dashboard.toReviewHeading": "Dokumente, die auf deine Überprüfung warten",
+  "dashboard.toReviewSubtitle": "Dokumente in Review, die du freigeben oder ablehnen kannst.",
+  "dashboard.toReviewEmpty": "Aktuell nichts in Review.",
+  "dashboard.openForReview": "Zur Review öffnen",
 };
 
 const fr: Dict = {
@@ -356,8 +371,13 @@ const fr: Dict = {
   "dashboard.verbApprove": "approbation",
   "dashboard.incomingRequestsHeading": "Demandes en attente de votre décision",
   "dashboard.incomingRequestsSubtitle": "Décidez sur ces demandes pour que les contributeurs puissent commencer à éditer.",
+  "dashboard.incomingRequestsEmpty": "Aucune demande de droits d'édition en attente.",
   "dashboard.incomingRequestRowTpl": "{name} · demandé le {date}",
   "dashboard.decideOnDoc": "Décider dans le document",
+  "dashboard.toReviewHeading": "Documents en attente de votre revue",
+  "dashboard.toReviewSubtitle": "Documents en revue que vous pouvez approuver ou rejeter.",
+  "dashboard.toReviewEmpty": "Rien en revue pour vous en ce moment.",
+  "dashboard.openForReview": "Ouvrir pour revue",
 };
 
 const it: Dict = {
@@ -443,8 +463,13 @@ const it: Dict = {
   "dashboard.verbApprove": "approvazione",
   "dashboard.incomingRequestsHeading": "Richieste in attesa della tua decisione",
   "dashboard.incomingRequestsSubtitle": "Decidi su queste richieste affinché i collaboratori possano iniziare a digitare.",
+  "dashboard.incomingRequestsEmpty": "Nessuna richiesta di diritti di modifica in attesa.",
   "dashboard.incomingRequestRowTpl": "{name} · richiesto il {date}",
   "dashboard.decideOnDoc": "Decidi nel documento",
+  "dashboard.toReviewHeading": "Documenti in attesa della tua revisione",
+  "dashboard.toReviewSubtitle": "Documenti in revisione che puoi approvare o rifiutare.",
+  "dashboard.toReviewEmpty": "Nulla in revisione al momento.",
+  "dashboard.openForReview": "Apri per revisione",
 };
 
 const es: Dict = {
@@ -530,8 +555,13 @@ const es: Dict = {
   "dashboard.verbApprove": "aprobar",
   "dashboard.incomingRequestsHeading": "Solicitudes esperando tu decisión",
   "dashboard.incomingRequestsSubtitle": "Decide sobre estas solicitudes para que los colaboradores puedan empezar a editar.",
+  "dashboard.incomingRequestsEmpty": "No hay solicitudes de derechos de edición pendientes.",
   "dashboard.incomingRequestRowTpl": "{name} · solicitado el {date}",
   "dashboard.decideOnDoc": "Decidir en el documento",
+  "dashboard.toReviewHeading": "Documentos esperando tu revisión",
+  "dashboard.toReviewSubtitle": "Documentos en revisión que puedes aprobar o rechazar.",
+  "dashboard.toReviewEmpty": "Nada en revisión por ahora.",
+  "dashboard.openForReview": "Abrir para revisión",
 };
 
 export const DICTIONARIES: Record<Lang, Dict> = { en, nl, de, fr, it, es };

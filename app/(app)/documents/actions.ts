@@ -765,6 +765,89 @@ export async function addComment(
   return { ok: true };
 }
 
+/**
+ * Permanently delete a document. Only admin / doc owner / can_approve.
+ * The DB-level RLS policy `documents_delete` enforces the same gate
+ * server-side; this action layers a "type the title to confirm" check
+ * on top so a misclick can't nuke a doc.
+ *
+ * Cascade behavior: every child table referencing documents.id has
+ * ON DELETE CASCADE, so versions, translations, comments, amendments,
+ * permissions, metadata, embeddings, discussions, citations, and
+ * edit-rights requests all go with the doc. Audit log entries stay —
+ * they reference entity_id as a string and document the deletion.
+ */
+export async function deleteDocument(
+  documentId: string,
+  confirmation: { typedTitle: string }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated" };
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id,title,owner_id")
+    .eq("id", documentId)
+    .maybeSingle<{ id: string; title: string; owner_id: string | null }>();
+  if (!doc) return { ok: false, error: "Document not found" };
+
+  // Type-to-confirm: must match exactly (after whitespace normalize).
+  // Same UX as GitHub repo deletion / Linear project deletion. Strong
+  // enough to block accidental clicks; not a password (we don't have
+  // a local password, OIDC owns identity).
+  const typed = (confirmation.typedTitle ?? "").trim();
+  if (typed !== doc.title.trim()) {
+    return {
+      ok: false,
+      error:
+        "Confirmation text doesn't match the document title. Type it exactly to delete.",
+    };
+  }
+
+  // Authorization: admin / owner / scoped policy_lead. Mirrors the RLS
+  // policy in migration 010 — defense in depth so we return a clear
+  // error instead of "0 rows deleted".
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle<{ role: string | null }>();
+  const isAdmin = me?.role === "admin";
+  const isOwner = doc.owner_id === user.id;
+  const canApprove = await canApproveDoc(documentId);
+  if (!isAdmin && !isOwner && !canApprove) {
+    return {
+      ok: false,
+      error:
+        "Only the document owner, an admin or a scoped policy lead can delete this document.",
+    };
+  }
+
+  // Audit BEFORE the delete so the entry survives the cascade. We log
+  // entity_id as the doc UUID + title so the row is meaningful even
+  // after the documents row is gone.
+  await logAudit("document.deleted", "document", documentId, {
+    title: doc.title,
+    deleted_by: user.id,
+  });
+
+  const { error } = await supabase
+    .from("documents")
+    .delete()
+    .eq("id", documentId);
+  if (error) return { ok: false, error: error.message };
+
+  // Refresh the listing surfaces. The deleted doc-page itself returns
+  // a 404 next render, which is correct.
+  revalidatePath("/documents");
+  revalidatePath("/library");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function resolveComment(commentId: string, resolved: boolean) {
   const supabase = await createClient();
   const { error } = await supabase
