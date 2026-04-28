@@ -59,6 +59,16 @@ interface Props {
   onChange: (html: string) => void;
   onSelectionText: (text: string) => void;
   onCommentRequest: (text: string) => void;
+  /**
+   * Fires whenever the editor's selection changes. Gets the selected
+   * text and the screen-space top of the selection's first character
+   * (viewport pixels). Use this to position floating affordances —
+   * e.g. the "+ Comment" button in the canvas margin.
+   * Empty selection → null.
+   */
+  onSelectionRect?: (
+    info: { text: string; viewportTop: number } | null
+  ) => void;
   onAnchorClickInDoc?: (commentId: string) => void;
   realtime?: RealtimeConfig | null;
   /**
@@ -85,6 +95,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       onChange,
       onSelectionText,
       onCommentRequest,
+      onSelectionRect,
       onAnchorClickInDoc,
       realtime,
       onRemoteStatusChange,
@@ -184,10 +195,20 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
           const { from, to, empty } = editor.state.selection;
           if (empty) {
             onSelectionText("");
+            onSelectionRect?.(null);
             return;
           }
           const text = editor.state.doc.textBetween(from, to, " ").trim();
           onSelectionText(text);
+          // Compute viewport-top of the selection's first character so
+          // the parent (DocumentWorkspace) can position a floating
+          // "+ Comment" affordance next to it.
+          try {
+            const coords = editor.view.coordsAtPos(from);
+            onSelectionRect?.({ text, viewportTop: coords.top });
+          } catch {
+            onSelectionRect?.(null);
+          }
         },
         editorProps: {
           attributes: {
@@ -594,17 +615,12 @@ function Toolbar({
       <Btn title="Undo" onClick={() => editor.chain().focus().undo().run()}>↶</Btn>
       <Btn title="Redo" onClick={() => editor.chain().focus().redo().run()}>↷</Btn>
 
-      <div className="ml-auto">
-        <button
-          type="button"
-          onClick={commentOnSelection}
-          disabled={selectionEmpty}
-          className="rounded bg-volt-600 px-3 py-1 text-xs font-medium text-white hover:bg-volt-700 disabled:cursor-not-allowed disabled:opacity-40"
-          title="Add comment on selected text"
-        >
-          💬 Comment on selection
-        </button>
-      </div>
+      {/*
+        The big "💬 Comment on selection" button used to live here.
+        It's now a floating "+" affordance that pops up in the canvas
+        margin at the height of the current selection, mirroring
+        Google Docs. See SelectionCommentAffordance below.
+      */}
     </div>
   );
 }

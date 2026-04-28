@@ -170,6 +170,14 @@ export default function DocumentWorkspace({
   // AI panel can be hidden for distraction-free editing; the floating
   // action icons toggle it.
   const [aiOpen, setAiOpen] = useState(true);
+  // Floating "+ Comment" affordance state. When the user has an active
+  // selection in the editor, we float a small button in the canvas
+  // margin at the same vertical height. Click → opens the comments
+  // panel pre-filled with the selection.
+  const [selectionRect, setSelectionRect] = useState<
+    { text: string; topInColumn: number } | null
+  >(null);
+  const paperColumnRef = useRef<HTMLDivElement>(null);
   const commentsRef = useRef<CommentsPanelHandle>(null);
   const editorRef = useRef<RichTextEditorHandle>(null);
 
@@ -365,7 +373,37 @@ export default function DocumentWorkspace({
       <div className="editor-canvas-fullbleed">
       <div className="paper-stack mx-auto">
       <div className="paper-and-comments">
-      <div className="paper-column">
+      <div className="paper-column" ref={paperColumnRef} style={{ position: "relative" }}>
+        {/*
+          Floating "+ Comment" button — positioned at the height of
+          the current text selection in the canvas margin. Mirrors
+          Google Docs. Hidden when nothing is selected or the user
+          can't comment.
+        */}
+        {selectionRect && currentUserId && (
+          <button
+            type="button"
+            onClick={() => {
+              commentsRef.current?.startComment(selectionRect.text);
+              setSelectionRect(null);
+            }}
+            aria-label={commentsLabels.comments}
+            title={commentsLabels.comments}
+            style={{
+              position: "absolute",
+              top: Math.max(0, selectionRect.topInColumn - 12),
+              right: -56,
+              zIndex: 25,
+            }}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-volt-200 bg-white text-volt-700 shadow-md transition hover:bg-volt-50 hover:shadow-lg"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <line x1="12" y1="8" x2="12" y2="14" />
+              <line x1="9" y1="11" x2="15" y2="11" />
+            </svg>
+          </button>
+        )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-1 pb-3 lg:px-0">
           <div className="flex items-center gap-2">
             <button
@@ -445,6 +483,18 @@ export default function DocumentWorkspace({
             onAnchorClickInDoc={handleAnchorClickInDoc}
             onRemoteStatusChange={handleRemoteStatusChange}
             onRemoteCommentsChanged={handleRemoteCommentsChanged}
+            onSelectionRect={(info) => {
+              if (!info) {
+                setSelectionRect(null);
+                return;
+              }
+              const colBox = paperColumnRef.current?.getBoundingClientRect();
+              if (!colBox) return;
+              setSelectionRect({
+                text: info.text,
+                topInColumn: info.viewportTop - colBox.top,
+              });
+            }}
             realtime={
               realtimeUrl && realtimeToken && currentUserId && currentUserName
                 ? {
