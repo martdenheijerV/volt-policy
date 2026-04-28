@@ -293,7 +293,7 @@ export default async function DocumentPage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full">
       {/*
         Header strip — single line with everything content-adjacent. No
         button row, no banners, no purpose-card-block. The kebab on the
@@ -301,7 +301,7 @@ export default async function DocumentPage({
         citations / downloads behind a single tap so the toolbar stops
         eating vertical space.
       */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+      <div className="mx-auto mb-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 print:hidden">
         <Link
           href="/documents"
           className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
@@ -375,7 +375,7 @@ export default async function DocumentPage({
         when you actually need them.
       */}
       {applicableFields.length > 0 && (
-        <div className="mt-6">
+        <div className="mx-auto mt-6 max-w-7xl px-6">
           <MetadataPanel
             documentId={doc.id}
             fields={applicableFields}

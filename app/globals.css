@@ -86,32 +86,90 @@ body {
 }
 
 /*
- * A4-paper editor styling.
+ * A4 editor styling — Google Docs feel.
  *
- * Earlier passes wrapped the paper in a grey "canvas" — Mart wanted
- * just the paper sitting directly on the body background with a small
- * shadow, so the canvas wrapper is gone. The paper is the only card.
- *
- * Title + Tiptap toolbar sit inside .paper-sticky-header which sticks
- * to the top of the viewport while you scroll, so formatting controls
- * are always reachable.
+ *  ┌── editor-canvas-fullbleed ──────────────────────────────────┐
+ *  │ (full viewport width, light grey)                           │
+ *  │                                                             │
+ *  │     ┌── paper-stack (max-w 1180px, mx-auto) ──┐             │
+ *  │     │   ┌── paper-and-comments (flex) ─────┐  │             │
+ *  │     │   │  ┌── paper-column ──┐  ┌─cmts──┐ │  │             │
+ *  │     │   │  │ toolbar          │  │ Floating│ │  │           │
+ *  │     │   │  │ ┌─editor-paper─┐ │  │ comments│ │  │           │
+ *  │     │   │  │ │  ......      │ │  │ at      │ │  │           │
+ *  │     │   │  │ │  prose       │ │  │ anchor  │ │  │           │
+ *  │     │   │  │ └──────────────┘ │  │ heights │ │  │           │
+ *  │     │   │  │ action bar       │  └─────────┘ │  │           │
+ *  │     │   │  └──────────────────┘              │  │           │
+ *  │     │   └────────────────────────────────────┘  │           │
+ *  │     └───────────────────────────────────────────┘           │
+ *  │                                                             │
+ *  └─────────────────────────────────────────────────────────────┘
  */
+.editor-canvas-fullbleed {
+  background: #e8eaed;
+  /* Break out of the page's max-width container by stretching to
+     viewport edges. The trick: position relative + width 100vw +
+     left calc((100% - 100vw) / 2). */
+  position: relative;
+  width: 100vw;
+  left: 50%;
+  margin-left: -50vw;
+  padding: 1.5rem 1rem;
+}
+.paper-stack {
+  max-width: 1180px;
+  width: 100%;
+}
+.paper-and-comments {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+.paper-column {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 820px;
+}
+.comments-layer {
+  position: relative;
+  flex: 0 0 320px;
+  min-height: 200px;
+}
+@media (max-width: 1100px) {
+  /* Stack comments below paper on narrow viewports. */
+  .paper-and-comments {
+    flex-direction: column;
+  }
+  .paper-column,
+  .comments-layer {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
 .editor-paper {
   background: white;
   width: 100%;
-  max-width: 820px;       /* Google Docs default. Slightly wider than
-                              21cm so prose has room to breathe. */
+  max-width: 820px;
   margin: 0 auto;
-  padding-top: 0;          /* sticky-header carries its own padding */
-  padding-bottom: 2cm;
-  padding-left: 0;
-  padding-right: 0;
+  padding: 0 0 2cm;
   box-shadow:
     0 1px 3px rgba(60, 64, 67, 0.15),
     0 4px 8px rgba(60, 64, 67, 0.15);
   border-radius: 2px;
   min-height: 29.7cm;
   position: relative;
+  /* Page-break visualisation: faint horizontal line every 29.7cm so
+     the user has a visual cue of where pages would break in print.
+     Tiny because ProseMirror doesn't actually paginate — this is just
+     a hint, not an accurate guide. */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(29.7cm - 1px),
+    rgba(0, 0, 0, 0.06) calc(29.7cm - 1px),
+    rgba(0, 0, 0, 0.06) 29.7cm
+  );
 }
 /* Sticky header: title + Tiptap toolbar stick to the top of the
    viewport as the user scrolls down through long content. */

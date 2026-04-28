@@ -18,7 +18,10 @@ import AIPanel, { type AIPanelLabels } from "./AIPanel";
 import DeleteDocumentButton, {
   type DeleteDocumentButtonLabels,
 } from "./DeleteDocumentButton";
-import EditorActionFloat from "./EditorActionFloat";
+// EditorActionFloat (the small comment/emoji/AI cluster) is no longer
+// rendered — the comments-layer with anchor-positioned cards replaces
+// it. The component file stays in components/ in case we want to
+// resurface a subset later.
 import { autosaveDraft, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
@@ -354,13 +357,16 @@ export default function DocumentWorkspace({
         </div>
       )}
       {/*
-        No grey canvas — the paper sits directly on the body
-        background with a small drop-shadow. Comments float beside
-        the paper at anchor heights instead of in a fixed sidebar.
+        Edge-to-edge canvas. Inside: a max-w container holding the
+        paper (centered/left) and the floating-comments layer (right).
+        Comments are absolutely positioned at anchor heights inside
+        that layer; the "+ Comment" affordance appears on selection.
       */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto_300px]">
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-1 pb-3">
+      <div className="editor-canvas-fullbleed">
+      <div className="paper-stack mx-auto">
+      <div className="paper-and-comments">
+      <div className="paper-column">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-1 pb-3 lg:px-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -648,21 +654,10 @@ export default function DocumentWorkspace({
       </div>
 
       {/*
-        Floating action icons in the canvas margin between paper and
-        sidebar — comment / emoji / AI toggle, à la Google Docs.
+        Floating comments layer — absolutely positioned to the right
+        of the paper, comment-cards inside it placed at anchor heights.
       */}
-      <EditorActionFloat
-        onAddComment={() => commentsRef.current?.startComment("")}
-        onToggleAi={() => setAiOpen((v) => !v)}
-        aiOpen={aiOpen}
-        labels={{
-          addComment: commentsLabels.comments,
-          reactWithEmoji: "Emoji reaction (coming soon)",
-          toggleAi: aiLabels.heading,
-        }}
-      />
-
-      <div className="flex flex-col gap-4">
+      <div className="comments-layer">
         <CommentsPanel
           ref={commentsRef}
           documentId={documentId}
@@ -674,13 +669,17 @@ export default function DocumentWorkspace({
           labels={commentsLabels}
         />
         {aiOpen && (
-          <AIPanel
-            documentId={documentId}
-            contentHtml={contentHtml}
-            language={language}
-            labels={aiLabels}
-          />
+          <div className="mt-6">
+            <AIPanel
+              documentId={documentId}
+              contentHtml={contentHtml}
+              language={language}
+              labels={aiLabels}
+            />
+          </div>
         )}
+      </div>
+      </div>
       </div>
       </div>
     </div>
