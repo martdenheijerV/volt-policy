@@ -462,29 +462,36 @@ export default function DocumentWorkspace({
               )}
 
               {/*
-                Change summary lives next to send-to-review because that's
-                when it matters: the editor is telling the approver
-                "here's what changed and why". The string ends up on the
-                version row at approval time. Hidden in draft for users
-                who can't ship the workflow forward.
+                Change summary lives next to send-to-review because
+                that's when it matters: the editor is telling the
+                approver "here's what changed and why". The string ends
+                up on the version row at approval time. Visible whenever
+                the Send-to-review button is — i.e. any non-review and
+                non-approved status the user can ship forward (draft,
+                archived-but-being-revived, etc.). Without this the
+                user gets the "summary required" error with no input
+                to fill in.
               */}
-              {canEdit && status === "draft" && canSendToReview && (
-                <div className="mb-3">
-                  <label
-                    htmlFor="change-summary"
-                    className="block text-xs font-medium uppercase tracking-wider text-slate-500"
-                  >
-                    {labels.changeSummary}
-                  </label>
-                  <input
-                    id="change-summary"
-                    value={changeSummary}
-                    onChange={(e) => setChangeSummary(e.target.value)}
-                    placeholder={labels.changeSummaryHintRequired}
-                    className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                  />
-                </div>
-              )}
+              {canEdit &&
+                status !== "review" &&
+                status !== "approved" &&
+                canSendToReview && (
+                  <div className="mb-3">
+                    <label
+                      htmlFor="change-summary"
+                      className="block text-xs font-medium uppercase tracking-wider text-slate-500"
+                    >
+                      {labels.changeSummary}
+                    </label>
+                    <input
+                      id="change-summary"
+                      value={changeSummary}
+                      onChange={(e) => setChangeSummary(e.target.value)}
+                      placeholder={labels.changeSummaryHintRequired}
+                      className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
 
               <div className="flex flex-wrap items-center gap-3">
                 {status !== "review" && status !== "approved" && canSendToReview && (
