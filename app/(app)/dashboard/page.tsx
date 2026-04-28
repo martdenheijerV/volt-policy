@@ -4,11 +4,108 @@ import { withUser } from "@/lib/db/sql";
 import { getCurrentUserId } from "@/lib/auth/server";
 import { getT } from "@/lib/i18n/server";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
+import { docTypeLabel } from "@/lib/doc-types";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import type { Document } from "@/lib/types";
 
 export default async function DashboardPage() {
-  const { t } = await getT();
+  const { t, lang } = await getT();
   const supabase = await createClient();
+
+  // Logged-in user + profile (so we can show their language preference
+  // and group memberships in this dashboard, the user's "home base").
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("id,full_name,role,language_pref")
+        .eq("id", user.id)
+        .maybeSingle<{
+          id: string;
+          full_name: string | null;
+          role: string | null;
+          language_pref: string;
+        }>()
+    : { data: null };
+
+  // Group memberships: which groups is the user IN, and what permission
+  // rules attach to those groups? Raw SQL because the shim doesn't handle
+  // the multi-table join cleanly. RLS-safe because we run with user
+  // context — if the user can't read user_group_members rows, they get
+  // back nothing rather than someone else's data.
+  const userId = user?.id ?? null;
+  const myGroups = userId
+    ? await withUser(userId, async (sql) => {
+        return await sql<{
+          group_id: string;
+          name: string;
+          description: string | null;
+          rules_json: string | null;
+        }[]>`
+          select g.id   as group_id,
+                 g.name as name,
+                 g.description as description,
+                 (
+                   select coalesce(
+                     json_agg(
+                       json_build_object(
+                         'document_type', p.document_type,
+                         'status', p.status,
+                         'can_read', p.can_read,
+                         'can_edit', p.can_edit,
+                         'can_comment', p.can_comment,
+                         'can_approve', p.can_approve
+                       )
+                     ),
+                     '[]'::json
+                   )::text
+                   from public.group_doc_permissions p
+                   where p.group_id = g.id
+                 ) as rules_json
+            from public.user_group_members m
+            join public.user_groups g on g.id = m.group_id
+           where m.user_id = ${userId}
+           order by g.name
+        `;
+      })
+    : [];
+
+  // Pending edit-rights requests this user has filed (so they can see
+  // their own ask waiting on someone). Wrapped in try/catch because the
+  // table might not exist yet on a stale deploy that hasn't run
+  // migration 008. We skip the section silently in that case.
+  let myPendingRequests: {
+    id: string;
+    document_id: string;
+    document_title: string;
+    created_at: string;
+  }[] = [];
+  if (userId) {
+    try {
+      myPendingRequests = await withUser(userId, async (sql) => {
+        return await sql<{
+          id: string;
+          document_id: string;
+          document_title: string;
+          created_at: string;
+        }[]>`
+          select r.id,
+                 r.document_id,
+                 d.title as document_title,
+                 r.created_at
+            from public.edit_rights_requests r
+            join public.documents d on d.id = r.document_id
+           where r.requester_id = ${userId}
+             and r.status = 'pending'
+           order by r.created_at desc
+        `;
+      });
+    } catch {
+      myPendingRequests = [];
+    }
+  }
 
   const { data: recent } = await supabase
     .from("documents")
@@ -30,8 +127,8 @@ export default async function DashboardPage() {
   // Last 7 days activity. The versions+profiles join cannot use the shim
   // (no PostgREST FK syntax), so it goes through raw SQL via withUser().
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const userId = await getCurrentUserId();
-  const weekVersions = await withUser(userId, async (sql) => {
+  const sqlUserId = await getCurrentUserId();
+  const weekVersions = await withUser(sqlUserId, async (sql) => {
     return await sql<{
       id: string;
       created_at: string;
@@ -123,7 +220,7 @@ export default async function DashboardPage() {
                       <div className="min-w-0">
                         <div className="truncate font-medium">{d.title}</div>
                         <div className="text-xs text-slate-500">
-                          {d.document_type} · v{d.current_version} ·{" "}
+                          {docTypeLabel(d.document_type)} · v{d.current_version} ·{" "}
                           {t("dashboard.updated")} {formatDate(d.updated_at)}
                         </div>
                       </div>
@@ -171,8 +268,169 @@ export default async function DashboardPage() {
           </div>
         </section>
       </div>
+
+      {/*
+        Personal panel: language preference + group memberships + open
+        edit-rights requests. Lives below the activity blocks because
+        when nothing has happened recently it's nice to still have your
+        own settings & access overview at a glance.
+      */}
+      <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <section
+          aria-labelledby="prefs-heading"
+          className="rounded-lg border bg-white p-5"
+        >
+          <h2 id="prefs-heading" className="text-xl font-semibold">
+            {t("dashboard.prefsHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {t("dashboard.prefsSubtitle")}
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <label
+              htmlFor="dashboard-base-language"
+              className="text-sm font-medium"
+            >
+              {t("dashboard.baseLanguage")}
+            </label>
+            {/*
+              Reuses the same client switcher the nav uses. It POSTs to
+              /api/lang which writes profile.language_pref + sets the
+              cookie. router.refresh() reloads the dashboard with the
+              new translations applied.
+            */}
+            <LanguageSwitcher value={profile?.language_pref ?? lang} />
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            {t("dashboard.baseLanguageHint")}
+          </p>
+        </section>
+
+        <section
+          aria-labelledby="groups-heading"
+          className="rounded-lg border bg-white p-5"
+        >
+          <h2 id="groups-heading" className="text-xl font-semibold">
+            {t("dashboard.myGroupsHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {t("dashboard.myGroupsSubtitle")}
+          </p>
+          {myGroups.length === 0 ? (
+            <div className="mt-4 rounded border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+              {t("dashboard.myGroupsEmpty")}
+            </div>
+          ) : (
+            <ul className="mt-4 divide-y rounded border">
+              {myGroups.map((g) => {
+                let rules: GroupRule[] = [];
+                try {
+                  rules = JSON.parse(g.rules_json ?? "[]") as GroupRule[];
+                } catch {
+                  rules = [];
+                }
+                return (
+                  <li key={g.group_id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{g.name}</div>
+                        {g.description && (
+                          <div className="text-xs text-slate-500">
+                            {g.description}
+                          </div>
+                        )}
+                      </div>
+                      {/* Admins / policy_leads can navigate into the
+                          group page; regular members just see the rule
+                          summary. */}
+                      {(profile?.role === "admin" ||
+                        profile?.role === "policy_lead") && (
+                        <Link
+                          href={`/admin/groups/${g.group_id}`}
+                          className="rounded border border-slate-300 px-3 py-1 text-xs hover:bg-slate-50"
+                        >
+                          {t("dashboard.openGroup")}
+                        </Link>
+                      )}
+                    </div>
+                    {rules.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {rules.map((r, i) => (
+                          <span
+                            key={i}
+                            className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
+                          >
+                            {ruleSummary(r, t)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {myPendingRequests.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-sm font-semibold text-slate-700">
+                {t("dashboard.pendingEditRequestsHeading")}
+              </h3>
+              <ul className="mt-2 divide-y rounded border">
+                {myPendingRequests.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <Link
+                      href={`/documents/${r.document_id}`}
+                      className="text-volt-700 hover:underline"
+                    >
+                      {r.document_title}
+                    </Link>
+                    <span className="text-xs text-slate-500">
+                      {formatDate(r.created_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-slate-500">
+                {t("dashboard.pendingEditRequestsHint")}
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
+}
+
+interface GroupRule {
+  document_type: string | null;
+  status: string | null;
+  can_read: boolean;
+  can_edit: boolean;
+  can_comment: boolean;
+  can_approve: boolean;
+}
+
+/**
+ * One-line summary of a group permission rule. Kept tiny on purpose —
+ * the dashboard is a glance, the full table lives on the group detail
+ * page.
+ */
+function ruleSummary(r: GroupRule, t: (k: string) => string): string {
+  const scope =
+    r.document_type && r.status
+      ? `${r.document_type} · ${r.status}`
+      : r.document_type
+      ? r.document_type
+      : r.status
+      ? r.status
+      : t("dashboard.allDocs");
+  const verbs: string[] = [];
+  if (r.can_approve) verbs.push(t("dashboard.verbApprove"));
+  if (r.can_edit) verbs.push(t("dashboard.verbEdit"));
+  if (r.can_comment) verbs.push(t("dashboard.verbComment"));
+  if (r.can_read) verbs.push(t("dashboard.verbRead"));
+  return `${scope}: ${verbs.join(", ") || "—"}`;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/db/client";
 import { formatDate } from "@/lib/utils";
 import { T } from "@/components/T";
 import { getTr } from "@/lib/i18n/server";
+import { docTypeLabel } from "@/lib/doc-types";
 import type { Document } from "@/lib/types";
 
 export default async function LibraryPage({
@@ -135,7 +136,7 @@ export default async function LibraryPage({
             className="block rounded-lg border bg-white p-5 hover:border-volt-400 hover:shadow-sm"
           >
             <div className="text-xs uppercase tracking-wider text-slate-500">
-              {d.document_type} · {d.language.toUpperCase()}
+              {docTypeLabel(d.document_type)} · {d.language.toUpperCase()}
             </div>
             <h2 className="mt-1 text-lg font-semibold text-slate-900">
               {d.title}

@@ -10,6 +10,14 @@ import { formatDate, statusBadgeClass } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
 import { createRealtimeToken } from "@/lib/realtime/token";
 import { canApproveDoc } from "@/lib/db/approval";
+import { docTypeLabel } from "@/lib/doc-types";
+import {
+  listEditRequestsForDoc,
+  getMyOpenRequestForDoc,
+  getDocParticipants,
+} from "@/lib/db/edit-rights";
+import EditRightsPanel from "@/components/EditRightsPanel";
+import type { EditRightsPanelLabels } from "@/components/EditRightsPanel";
 import type { Comment, Document, Profile } from "@/lib/types";
 import type { DocumentWorkspaceLabels } from "@/components/DocumentWorkspace";
 import type { CommentsPanelLabels } from "@/components/CommentsPanel";
@@ -87,12 +95,17 @@ export default async function DocumentPage({
     canApproveThisDoc = await canApproveDoc(doc.id);
   }
 
+  // Suggestion-mode-by-default: as of migration 008, the bare `editor`
+  // role no longer gets automatic edit access — they must request it
+  // (or an admin pre-grants via document_permissions / group rules).
+  // Only admin, doc owner, scoped policy_lead, and explicit doc-perm
+  // grants bypass the request flow. This mirrors the new `doc_editable`
+  // SQL function exactly, so client and DB agree on who can type.
   const baseEditable =
     !!user &&
     (profile?.role === "admin" ||
-      profile?.role === "editor" ||
-      profile?.role === "policy_lead" ||
       doc.owner_id === user.id ||
+      canApproveThisDoc ||
       !!permission?.can_edit);
   // Three-phase workflow:
   //  - draft (concept): everyone with base edit rights can type. Live collab.
@@ -162,6 +175,25 @@ export default async function DocumentPage({
   // a banner with a "view original" link instead.
   const displayTitle = canEdit ? baseTitle : rendered.title;
   const displayContent = canEdit ? baseContent : rendered.content;
+
+  // Edit-rights data: who has access (owner, explicit grants, group
+  // members), who's waiting for a decision, and whether the current
+  // user has an open request. These hits are cheap (each is a couple
+  // of indexed selects) and produce all the data the EditRightsPanel
+  // needs without it having to call back into the server.
+  const [editRequests, myOpenRequest, participants] = await Promise.all([
+    listEditRequestsForDoc(doc.id),
+    getMyOpenRequestForDoc(doc.id),
+    getDocParticipants(doc.id),
+  ]);
+  // Approver-side gate: admin OR doc owner OR can_approve_doc. Same as
+  // can_decide_edit_request — kept consistent so RLS and UI agree.
+  const isApprover =
+    profile?.role === "admin" || isOwner || canApproveThisDoc;
+  // Only the still-pending requests get the approve/reject buttons.
+  // History (approved/rejected/cancelled) lives in the audit log; we
+  // could surface it later but for now we keep the panel focused.
+  const pendingRequests = editRequests.filter((r) => r.status === "pending");
 
   // Pending-review state: editor saved a new version on top of an already-
   // approved doc, and the admin hasn't decided yet. Public still sees the
@@ -272,7 +304,7 @@ export default async function DocumentPage({
       </div>
 
       <div className="mb-2 text-xs text-slate-500 print:hidden">
-        {doc.document_type} · {doc.language.toUpperCase()} · updated{" "}
+        {docTypeLabel(doc.document_type)} · {doc.language.toUpperCase()} · updated{" "}
         {formatDate(doc.updated_at)}
         {doc.approved_at && ` · approved ${formatDate(doc.approved_at)}`}
       </div>
@@ -414,6 +446,17 @@ export default async function DocumentPage({
           />
         </div>
       )}
+
+      <EditRightsPanel
+        documentId={doc.id}
+        currentUserId={user?.id ?? null}
+        currentUserCanEdit={canEdit}
+        isApprover={isApprover}
+        myOpenRequest={myOpenRequest}
+        pendingRequests={pendingRequests}
+        participants={participants}
+        labels={await buildEditRightsLabels(tr)}
+      />
 
       <DocumentWorkspace
         documentId={doc.id}
@@ -703,6 +746,93 @@ async function buildMetadataLabels(
     tr("Failed"),
   ]);
   return { metadata, failed };
+}
+
+async function buildEditRightsLabels(
+  tr: (s: string) => Promise<string>
+): Promise<EditRightsPanelLabels> {
+  const [
+    panelHeading,
+    youAreInSuggestionMode,
+    requestEditRights,
+    requesting,
+    yourPendingRequest,
+    cancelRequest,
+    messagePlaceholder,
+    pendingRequestsHeading,
+    noPendingRequests,
+    approve,
+    reject,
+    decisionNotePlaceholder,
+    participantsHeading,
+    ownerLabel,
+    roleLabel,
+    accessLabel,
+    canEdit,
+    canComment,
+    canApproveLbl,
+    viaGroupTpl,
+    noOtherParticipants,
+    revoke,
+    failed,
+    requestedAt,
+    decisionByTpl,
+  ] = await Promise.all([
+    tr("Access & edit rights"),
+    tr(
+      "You're in suggestion mode. You can read and comment, but you need edit rights to type in the document."
+    ),
+    tr("Request edit rights"),
+    tr("Requesting…"),
+    tr("Your request is waiting for a decision."),
+    tr("Cancel request"),
+    tr("Why do you need edit rights? (optional)"),
+    tr("Pending requests"),
+    tr("No pending requests."),
+    tr("Approve"),
+    tr("Reject"),
+    tr("Reason (optional, kept in audit log)"),
+    tr("Who has access"),
+    tr("Owner"),
+    tr("Role"),
+    tr("Access"),
+    tr("Edit"),
+    tr("Comment"),
+    tr("Approve"),
+    tr("via group {name}"),
+    tr("No participants yet — only the owner can edit so far."),
+    tr("Revoke"),
+    tr("Something went wrong."),
+    tr("Requested:"),
+    tr("by {name}"),
+  ]);
+  return {
+    panelHeading,
+    youAreInSuggestionMode,
+    requestEditRights,
+    requesting,
+    yourPendingRequest,
+    cancelRequest,
+    messagePlaceholder,
+    pendingRequestsHeading,
+    noPendingRequests,
+    approve,
+    reject,
+    decisionNotePlaceholder,
+    participantsHeading,
+    ownerLabel,
+    roleLabel,
+    accessLabel,
+    canEdit,
+    canComment,
+    canApprove: canApproveLbl,
+    viaGroupTpl,
+    noOtherParticipants,
+    revoke,
+    failed,
+    requestedAt,
+    decisionByTpl,
+  };
 }
 
 async function buildPendingReviewLabels(

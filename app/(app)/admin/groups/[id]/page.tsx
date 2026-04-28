@@ -12,6 +12,7 @@ import {
 import GroupActions, { type GroupActionsLabels } from "./GroupActions";
 import { T } from "@/components/T";
 import { getT, getTr } from "@/lib/i18n/server";
+import { DOC_TYPES, DOC_TYPE_LABELS } from "@/lib/doc-types";
 
 export default async function GroupDetailPage({
   params,
@@ -85,12 +86,6 @@ export default async function GroupDetailPage({
     noMembers,
     noRules,
     deleteGroupBtn,
-    typePolicy,
-    typePosition,
-    typeResolution,
-    typeStatement,
-    typeMotion,
-    typeOther,
     addMemberLabel,
     addLabel,
     addingLabel,
@@ -109,16 +104,19 @@ export default async function GroupDetailPage({
     tr("No members"),
     tr("No rules yet"),
     tr("Delete group"),
-    tr("Policy"),
-    tr("Position"),
-    tr("Resolution"),
-    tr("Statement"),
-    tr("Motion"),
-    tr("Other"),
     tr("Add member…"),
     tr("Add"),
     tr("Adding…"),
   ]);
+
+  // Pre-translate every doc-type label once (cached after first fetch).
+  const typeLabelEntries = await Promise.all(
+    DOC_TYPES.map(async (k) => [k, await tr(DOC_TYPE_LABELS[k])] as const)
+  );
+  const typeLabels = Object.fromEntries(typeLabelEntries) as Record<
+    (typeof DOC_TYPES)[number],
+    string
+  >;
 
   const groupActionsLabels: GroupActionsLabels = {
     addMember: addMemberLabel,
@@ -185,12 +183,11 @@ export default async function GroupDetailPage({
           <label className="block text-xs uppercase tracking-wider text-slate-500">{typeCol}</label>
           <select name="document_type" className="mt-1 rounded border border-slate-300 px-2 py-1">
             <option value="">{typeAll}</option>
-            <option value="policy">{typePolicy}</option>
-            <option value="position">{typePosition}</option>
-            <option value="resolution">{typeResolution}</option>
-            <option value="statement">{typeStatement}</option>
-            <option value="motion">{typeMotion}</option>
-            <option value="other">{typeOther}</option>
+            {DOC_TYPES.map((k) => (
+              <option key={k} value={k}>
+                {typeLabels[k]}
+              </option>
+            ))}
           </select>
         </div>
         <div>

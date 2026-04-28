@@ -32,12 +32,21 @@ export default async function Nav({ profile }: { profile: Profile | null }) {
                 {t("nav.admin")}
               </Link>
               <Link href="/admin/groups" className="hover:underline">
-                Groups
+                {t("nav.groups")}
               </Link>
               <Link href="/admin/metadata" className="hover:underline">
-                Metadata
+                {t("nav.metadata")}
               </Link>
             </>
+          )}
+          {/* Policy leads get a Groups link too — but only to the
+              groups they're a member of (the page filters by membership
+              when the viewer isn't an admin). They can't add/remove
+              members or change permission rules; that stays admin-only. */}
+          {profile?.role === "policy_lead" && (
+            <Link href="/admin/groups" className="hover:underline">
+              {t("nav.groups")}
+            </Link>
           )}
         </nav>
         <div className="flex items-center gap-3 text-sm">

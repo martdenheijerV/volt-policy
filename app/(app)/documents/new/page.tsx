@@ -4,6 +4,7 @@ import MetadataField from "@/components/MetadataField";
 import { createDocument } from "../actions";
 import { T } from "@/components/T";
 import { getTr } from "@/lib/i18n/server";
+import { DOC_TYPES, DOC_TYPE_LABELS } from "@/lib/doc-types";
 
 export default async function NewDocumentPage() {
   const supabase = await createClient();
@@ -16,23 +17,19 @@ export default async function NewDocumentPage() {
   // Group fields: shown for all (applies_to null) vs per-type
   const universal = (fields ?? []).filter((f) => !f.applies_to);
 
-  const [
-    typePolicy,
-    typePosition,
-    typeResolution,
-    typeStatement,
-    typeMotion,
-    typeOther,
-    purposePh,
-    tagsPh,
-    contentPh,
-  ] = await Promise.all([
-    tr("Policy"),
-    tr("Position"),
-    tr("Resolution"),
-    tr("Statement"),
-    tr("Motion"),
-    tr("Other"),
+  // Translate every doc-type label up front. tr() hits the dict cache
+  // first (instant for languages we've already cached) and only goes to
+  // DeepL for genuinely new strings — so this Promise.all is cheap on
+  // warm caches and one-time pricey on cold ones.
+  const typeLabelEntries = await Promise.all(
+    DOC_TYPES.map(async (k) => [k, await tr(DOC_TYPE_LABELS[k])] as const)
+  );
+  const typeLabels = Object.fromEntries(typeLabelEntries) as Record<
+    (typeof DOC_TYPES)[number],
+    string
+  >;
+
+  const [purposePh, tagsPh, contentPh] = await Promise.all([
     tr("Why does this document exist?"),
     tr("climate, eu, trade (comma-separated)"),
     tr("# Heading\n\nYour policy text…"),
@@ -74,12 +71,11 @@ export default async function NewDocumentPage() {
               defaultValue="policy"
               className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
             >
-              <option value="policy">{typePolicy}</option>
-              <option value="position">{typePosition}</option>
-              <option value="resolution">{typeResolution}</option>
-              <option value="statement">{typeStatement}</option>
-              <option value="motion">{typeMotion}</option>
-              <option value="other">{typeOther}</option>
+              {DOC_TYPES.map((k) => (
+                <option key={k} value={k}>
+                  {typeLabels[k]}
+                </option>
+              ))}
             </select>
           </div>
           <div>

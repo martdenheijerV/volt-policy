@@ -3,6 +3,7 @@ import { createClient } from "@/lib/db/client";
 import { formatDate, statusBadgeClass } from "@/lib/utils";
 import { T } from "@/components/T";
 import { getT, getTr } from "@/lib/i18n/server";
+import { DOC_TYPES, DOC_TYPE_LABELS, docTypeLabel } from "@/lib/doc-types";
 import type { Document, DocStatus } from "@/lib/types";
 
 export default async function DocumentsPage({
@@ -34,29 +35,22 @@ export default async function DocumentsPage({
   };
 
   // Pre-translate strings used inside attributes (placeholder, aria-label).
-  const [
-    searchPlaceholder,
-    searchAria,
-    statusAllLabel,
-    typeAllLabel,
-    typePolicy,
-    typePosition,
-    typeResolution,
-    typeStatement,
-    typeMotion,
-    typeOther,
-  ] = await Promise.all([
-    tr("Search title, purpose, content…"),
-    tr("Search documents"),
-    tr("All statuses"),
-    tr("All types"),
-    tr("Policy"),
-    tr("Position"),
-    tr("Resolution"),
-    tr("Statement"),
-    tr("Motion"),
-    tr("Other"),
-  ]);
+  const [searchPlaceholder, searchAria, statusAllLabel, typeAllLabel] =
+    await Promise.all([
+      tr("Search title, purpose, content…"),
+      tr("Search documents"),
+      tr("All statuses"),
+      tr("All types"),
+    ]);
+
+  // Translate every doc-type label once for the type filter.
+  const typeLabelEntries = await Promise.all(
+    DOC_TYPES.map(async (k) => [k, await tr(DOC_TYPE_LABELS[k])] as const)
+  );
+  const typeLabels = Object.fromEntries(typeLabelEntries) as Record<
+    (typeof DOC_TYPES)[number],
+    string
+  >;
 
   return (
     <div>
@@ -110,12 +104,11 @@ export default async function DocumentsPage({
           aria-label={t("doc.type")}
         >
           <option value="">{typeAllLabel}</option>
-          <option value="policy">{typePolicy}</option>
-          <option value="position">{typePosition}</option>
-          <option value="resolution">{typeResolution}</option>
-          <option value="statement">{typeStatement}</option>
-          <option value="motion">{typeMotion}</option>
-          <option value="other">{typeOther}</option>
+          {DOC_TYPES.map((k) => (
+            <option key={k} value={k}>
+              {typeLabels[k]}
+            </option>
+          ))}
         </select>
         <button
           type="submit"
@@ -167,7 +160,7 @@ export default async function DocumentsPage({
                       </div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 capitalize">{d.document_type}</td>
+                  <td className="px-4 py-3">{docTypeLabel(d.document_type)}</td>
                   <td className="px-4 py-3 uppercase">{d.language}</td>
                   <td className="px-4 py-3">
                     <span

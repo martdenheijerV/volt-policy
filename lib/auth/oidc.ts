@@ -20,6 +20,7 @@ interface DiscoveryDoc {
   jwks_uri: string;
   issuer: string;
   userinfo_endpoint?: string;
+  end_session_endpoint?: string;
 }
 
 let _discovery: DiscoveryDoc | null = null;
@@ -32,6 +33,31 @@ async function getDiscovery(): Promise<DiscoveryDoc> {
   if (!resp.ok) throw new Error(`OIDC discovery failed: ${resp.status} ${await resp.text()}`);
   _discovery = (await resp.json()) as DiscoveryDoc;
   return _discovery;
+}
+
+/**
+ * Build the OIDC RP-initiated logout URL. After Authentik kills the SSO
+ * session it redirects the browser back to `postLogoutUrl` (which is our
+ * homepage). If the IdP doesn't expose `end_session_endpoint` we fall
+ * back to plain `null` and the caller redirects locally — the user's
+ * Authentik session lives on but the app cookie is gone.
+ */
+export async function buildEndSessionUrl(
+  postLogoutUrl: string,
+  idTokenHint?: string
+): Promise<string | null> {
+  const disco = await getDiscovery();
+  if (!disco.end_session_endpoint) return null;
+  const cfg = getOidcConfig();
+  const u = new URL(disco.end_session_endpoint);
+  // Authentik accepts both client_id and post_logout_redirect_uri params;
+  // it requires that the redirect URI be registered as a logout target
+  // on the application. id_token_hint helps Authentik identify which
+  // session to terminate when multiple are open in the same browser.
+  u.searchParams.set("client_id", cfg.clientId);
+  u.searchParams.set("post_logout_redirect_uri", postLogoutUrl);
+  if (idTokenHint) u.searchParams.set("id_token_hint", idTokenHint);
+  return u.toString();
 }
 
 export async function buildAuthorizationUrl(state: string, codeVerifier: string, nonce: string) {

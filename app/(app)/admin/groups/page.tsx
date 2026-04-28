@@ -16,12 +16,40 @@ export default async function GroupsPage() {
     .select("role")
     .eq("id", user?.id ?? "")
     .maybeSingle();
-  if (me?.role !== "admin") redirect("/dashboard");
+  // Admin and policy_lead get access. Admin sees + edits everything;
+  // policy_lead sees the groups they are a member of (read-only) so they
+  // can navigate into the groups they steward without admin scaffolding.
+  const isAdmin = me?.role === "admin";
+  const isPolicyLead = me?.role === "policy_lead";
+  if (!isAdmin && !isPolicyLead) redirect("/dashboard");
 
-  const { data: groups } = await supabase
-    .from("user_groups")
-    .select("id,name,description,created_at")
-    .order("name");
+  let groups: { id: string; name: string; description: string | null; created_at: string }[] | null = null;
+  if (isAdmin) {
+    const { data } = await supabase
+      .from("user_groups")
+      .select("id,name,description,created_at")
+      .order("name");
+    groups = data;
+  } else {
+    // Policy_lead: only show groups this user is in. We get their
+    // group_ids first, then look up the groups themselves. The shim
+    // doesn't support .in() reliably with empty arrays, so we guard.
+    const { data: memberships } = await supabase
+      .from("user_group_members")
+      .select("group_id")
+      .eq("user_id", user?.id ?? "");
+    const groupIds = (memberships ?? []).map((m) => m.group_id);
+    if (groupIds.length > 0) {
+      const { data } = await supabase
+        .from("user_groups")
+        .select("id,name,description,created_at")
+        .in("id", groupIds)
+        .order("name");
+      groups = data;
+    } else {
+      groups = [];
+    }
+  }
 
   const [
     newGroupName,
@@ -55,6 +83,7 @@ export default async function GroupsPage() {
         </T>
       </p>
 
+      {isAdmin && (
       <form action={createGroup} className="mt-6 flex flex-wrap items-end gap-3 rounded border bg-white p-4">
         <div className="flex-1">
           <label htmlFor="name" className="block text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -82,6 +111,7 @@ export default async function GroupsPage() {
           {create}
         </button>
       </form>
+      )}
 
       <div className="mt-8 overflow-hidden rounded-lg border bg-white">
         <table className="w-full text-left text-sm">

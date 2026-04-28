@@ -11,7 +11,61 @@ export type DocType =
   | "resolution"
   | "statement"
   | "motion"
+  | "touchstone"
+  | "roadmap_europe"
+  | "roadmap_national"
+  | "roadmap_local"
+  | "electoral_programme_europe"
+  | "electoral_programme_national"
+  | "electoral_programme_local"
+  | "campaign_programme_europe"
+  | "campaign_programme_national"
+  | "campaign_programme_local"
+  | "best_practice"
+  | "eo_speech"
   | "other";
+
+/** Ordered list used for selectors + iteration. Matches the enum in 008. */
+export const DOC_TYPES: ReadonlyArray<DocType> = [
+  "policy",
+  "position",
+  "resolution",
+  "statement",
+  "motion",
+  "touchstone",
+  "roadmap_europe",
+  "roadmap_national",
+  "roadmap_local",
+  "electoral_programme_europe",
+  "electoral_programme_national",
+  "electoral_programme_local",
+  "campaign_programme_europe",
+  "campaign_programme_national",
+  "campaign_programme_local",
+  "best_practice",
+  "eo_speech",
+  "other",
+] as const;
+
+export type EditRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
+export interface EditRightsRequest {
+  id: string;
+  document_id: string;
+  requester_id: string;
+  requester_name_cached: string | null;
+  message: string | null;
+  status: EditRequestStatus;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Profile {
   id: string;

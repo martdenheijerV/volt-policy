@@ -5,6 +5,7 @@ import { createClient } from "@/lib/db/client";
 import { contentToHtml } from "@/lib/sanitize";
 import { formatDate } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
+import { docTypeLabel } from "@/lib/doc-types";
 import type { Document } from "@/lib/types";
 
 const SUPPORTED_LANGS = ["nl", "en", "de", "fr", "it", "es"];
@@ -84,7 +85,7 @@ export default async function PublicDocumentPage({
       </Link>
       <div className="mt-4 flex flex-wrap items-center gap-3 text-xs uppercase tracking-wider text-slate-500">
         <span>
-          {doc.document_type} · {rendered.language.toUpperCase()} · v{publicVersion}
+          {docTypeLabel(doc.document_type)} · {rendered.language.toUpperCase()} · v{publicVersion}
         </span>
         {!rendered.isOriginal && (
           <Link
