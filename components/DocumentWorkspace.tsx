@@ -370,11 +370,13 @@ export default function DocumentWorkspace({
 
         {/* Editor stays mounted across view toggles to preserve cursor + content */}
         <div className={view === "edit" ? "" : "hidden"}>
-          <div className="px-5 pt-4">
-            <label
-              htmlFor="doc-title"
-              className="block text-xs font-medium uppercase tracking-wider text-slate-500"
-            >
+          <div className="px-6 pt-6">
+            {/*
+              No visible "TITLE" label — modern editors (Google Docs,
+              Notion, Linear) just use the input itself as the title row.
+              The visually-hidden label keeps screen readers happy.
+            */}
+            <label htmlFor="doc-title" className="sr-only">
               {labels.title}
             </label>
             <input
@@ -382,7 +384,8 @@ export default function DocumentWorkspace({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={!canEdit}
-              className="mt-1 w-full border-0 px-0 py-1 text-3xl font-bold focus:outline-none focus:ring-0 disabled:bg-transparent"
+              placeholder={labels.title}
+              className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
             />
           </div>
 

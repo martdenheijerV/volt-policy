@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 import DocumentWorkspace from "@/components/DocumentWorkspace";
 import MetadataPanel from "@/components/MetadataPanel";
-import PendingReviewBanner from "@/components/PendingReviewBanner";
+// PendingReviewBanner used to live above the editor; the same content
+// has migrated to the bottom-right DocPageToasts (with inline approve/
+// reject) so the editor isn't pushed down by a banner.
 import { T } from "@/components/T";
 import { getT, getTr } from "@/lib/i18n/server";
-import { formatDate, statusBadgeClass } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { getDocInLanguage } from "@/lib/translate";
 import { createRealtimeToken } from "@/lib/realtime/token";
 import { canApproveDoc } from "@/lib/db/approval";
@@ -20,12 +22,22 @@ import EditRightsPanel from "@/components/EditRightsPanel";
 import type { EditRightsPanelLabels } from "@/components/EditRightsPanel";
 import DeleteDocumentButton from "@/components/DeleteDocumentButton";
 import type { DeleteDocumentButtonLabels } from "@/components/DeleteDocumentButton";
+import DocOverflowMenu, {
+  type OverflowItem,
+} from "@/components/DocOverflowMenu";
+import DocStatusPill from "@/components/DocStatusPill";
+import DocPageToasts, {
+  type DocPageToastsLabels,
+} from "@/components/DocPageToasts";
 import type { Comment, Document, Profile } from "@/lib/types";
 import type { DocumentWorkspaceLabels } from "@/components/DocumentWorkspace";
 import type { CommentsPanelLabels } from "@/components/CommentsPanel";
 import type { AIPanelLabels } from "@/components/AIPanel";
 import type { MetadataPanelLabels } from "@/components/MetadataPanel";
 import type { PendingReviewBannerLabels } from "@/components/PendingReviewBanner";
+// ^ kept around because buildPendingReviewLabels still exists for any
+//   future surface that wants the old banner shape. Not actively used
+//   on this page anymore.
 
 export default async function DocumentPage({
   params,
@@ -224,266 +236,102 @@ export default async function DocumentPage({
     }
   }
 
+  // Build the kebab-menu items: less-frequent links + downloads. Empty
+  // arrays / falsy items are filtered so the menu shrinks naturally
+  // when a feature is off (e.g. citations not enabled, no discussion link).
+  const overflowItems: OverflowItem[] = [
+    { kind: "link", label: t("doc.history"), href: `/documents/${doc.id}/history`, icon: "📜" },
+    { kind: "link", label: t("doc.amendments"), href: `/documents/${doc.id}/amendments`, icon: "✎" },
+    ...(doc.citations_enabled
+      ? [
+          {
+            kind: "link" as const,
+            label: t("doc.citations"),
+            href: `/documents/${doc.id}/citations`,
+            icon: "📚",
+          },
+        ]
+      : []),
+    ...(discussion?.url
+      ? [
+          {
+            kind: "link" as const,
+            label: t("doc.discussion"),
+            href: discussion.url,
+            icon: "💬",
+            external: true,
+          },
+        ]
+      : canEdit
+      ? [
+          {
+            kind: "link" as const,
+            label: await tr("Add discussion link"),
+            href: `/documents/${doc.id}/discussion`,
+            icon: "💬",
+          },
+        ]
+      : []),
+    { kind: "divider" },
+    { kind: "download", label: await tr("Download .md"), href: `/api/documents/${doc.id}/export?format=md` },
+    { kind: "download", label: await tr("Download .html"), href: `/api/documents/${doc.id}/export?format=html` },
+    { kind: "download", label: await tr("Download .docx"), href: `/api/documents/${doc.id}/export?format=docx` },
+  ];
+
+  const statusLabel = t(
+    doc.status === "draft"
+      ? "doc.statusDraft"
+      : doc.status === "review"
+      ? "doc.statusReview"
+      : doc.status === "approved"
+      ? "doc.statusApproved"
+      : "doc.statusArchived"
+  );
+
   return (
-    <div>
+    <div className="mx-auto w-full max-w-5xl">
+      {/*
+        Header strip — single line with everything content-adjacent. No
+        button row, no banners, no purpose-card-block. The kebab on the
+        right hides version-history / amendments / discussion /
+        citations / downloads behind a single tap so the toolbar stops
+        eating vertical space.
+      */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link
           href="/documents"
-          className="text-sm text-slate-500 hover:underline"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
         >
           ← <T>All documents</T>
         </Link>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span
-            className={`rounded px-2 py-1 text-xs font-medium ${statusBadgeClass(
-              doc.status
-            )}`}
-          >
-            {t(
-              doc.status === "draft"
-                ? "doc.statusDraft"
-                : doc.status === "review"
-                ? "doc.statusReview"
-                : doc.status === "approved"
-                ? "doc.statusApproved"
-                : "doc.statusArchived"
-            )}
+        <div className="flex items-center gap-3 text-sm">
+          <span className="hidden text-xs text-slate-500 sm:inline">
+            {docTypeLabel(doc.document_type)} · {doc.language.toUpperCase()}
+            {doc.current_version > 0 && ` · v${doc.current_version}`}
           </span>
-          <Link
-            href={`/documents/${doc.id}/history`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            {t("doc.history")}
-          </Link>
-          <Link
-            href={`/documents/${doc.id}/amendments`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            {t("doc.amendments")}
-          </Link>
-          {/*
-            Citations is opt-in per document (set at creation, stored on
-            documents.citations_enabled). Only show the tab when the
-            doc actually uses formal cite_key references — keeps the
-            toolbar clean for the 95% of docs that just hyperlink in
-            prose. The page itself remains reachable via direct URL for
-            anyone who needs to flip through old data.
-          */}
-          {doc.citations_enabled && (
-            <Link
-              href={`/documents/${doc.id}/citations`}
-              className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-            >
-              {t("doc.citations")}
-            </Link>
-          )}
-          {discussion?.url ? (
-            <a
-              href={discussion.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded border border-volt-600 px-3 py-1 font-medium text-volt-700 hover:bg-volt-50"
-            >
-              💬 {t("doc.discussion")}
-            </a>
-          ) : canEdit ? (
-            <Link
-              href={`/documents/${doc.id}/discussion`}
-              className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-            >
-              + <T>Discussion link</T>
-            </Link>
-          ) : null}
-          <a
-            href={`/api/documents/${doc.id}/export?format=md`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            .md
-          </a>
-          <a
-            href={`/api/documents/${doc.id}/export?format=html`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            .html
-          </a>
-          <a
-            href={`/api/documents/${doc.id}/export?format=docx`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            .docx
-          </a>
-          {/*
-            Destructive action lives at the very end of the toolbar so
-            it doesn't sit between everyday navigation buttons. Visible
-            to the same people who can re-open / approve / reject this
-            doc — admins, owner, scoped policy_lead. Type-to-confirm
-            inside the modal blocks misclicks.
-          */}
-          {isApprover && (
-            <DeleteDocumentButton
-              documentId={doc.id}
-              documentTitle={doc.title}
-              labels={await buildDeleteLabels(tr)}
-            />
-          )}
+          <DocStatusPill status={doc.status} label={statusLabel} />
+          <DocOverflowMenu
+            items={overflowItems}
+            ariaLabel={await tr("More document actions")}
+          />
         </div>
-      </div>
-
-      <div className="mb-2 text-xs text-slate-500 print:hidden">
-        {docTypeLabel(doc.document_type)} · {doc.language.toUpperCase()} · updated{" "}
-        {formatDate(doc.updated_at)}
-        {doc.approved_at && ` · approved ${formatDate(doc.approved_at)}`}
       </div>
 
       {doc.purpose && (
-        <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 print:hidden">
-          <span className="font-medium">
+        <p className="mb-4 text-sm italic text-slate-500 print:hidden">
+          <span className="font-medium not-italic text-slate-700">
             <T>Purpose:</T>
           </span>{" "}
           {doc.purpose}
-        </div>
+        </p>
       )}
 
-      {doc.status === "review" && (
-        <div
-          className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 print:hidden"
-          role="status"
-        >
-          🔒{" "}
-          {canApproveThisDoc ? (
-            <>
-              <strong>
-                <T>Awaiting your approval.</T>
-              </strong>{" "}
-              {(
-                await tr(
-                  "You're reading the frozen v{n} snapshot. Approve to publish it, or reject to send it back to draft so editors can iterate. Editors can still leave comments + suggestions while you decide."
-                )
-              ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
-            </>
-          ) : (
-            <>
-              <strong>
-                <T>Under review.</T>
-              </strong>{" "}
-              {(
-                await tr(
-                  "An admin is reviewing v{n}. Typing is locked for everyone until they approve or reject. You can still leave comments and suggestions."
-                )
-              ).replace("{n}", String(doc.review_version_number ?? doc.current_version))}
-            </>
-          )}
-          {/*
-            Diff link: compare the snapshot under review against the
-            previously-approved version (or v1 for first-time approvals)
-            so the reviewer immediately sees what changed.
-          */}
-          {doc.review_version_number && doc.review_version_number > 1 && (
-            <>
-              {" "}
-              <Link
-                href={`/documents/${doc.id}/compare?from=${
-                  doc.approved_version_number ?? doc.review_version_number - 1
-                }&to=${doc.review_version_number}`}
-                className="font-medium underline hover:no-underline"
-              >
-                <T>View diff →</T>
-              </Link>
-            </>
-          )}
-        </div>
-      )}
-
-      {doc.status === "approved" && (
-        <div
-          className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900 print:hidden"
-          role="status"
-        >
-          ✅{" "}
-          <strong>
-            <T>Approved.</T>
-          </strong>{" "}
-          {(
-            await tr(
-              "Public sees v{n} on /library/{slug}. Editing is locked. Approvers can re-open this doc to prepare the next version — public will keep seeing v{n} in the meantime."
-            )
-          )
-            .replace("{n}", String(doc.approved_version_number ?? doc.current_version))
-            .replace("{slug}", doc.slug)}
-        </div>
-      )}
-
-      {hasPendingReview && profile?.role === "admin" && (
-        <PendingReviewBanner
-          documentId={doc.id}
-          approvedVersion={doc.approved_version_number!}
-          currentVersion={doc.current_version}
-          pendingAuthorName={pendingAuthorName}
-          pendingChangeSummary={pendingChangeSummary}
-          labels={await buildPendingReviewLabels(tr)}
-        />
-      )}
-      {hasPendingReview && profile?.role !== "admin" && (
-        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 print:hidden">
-          ⏳{" "}
-          {(
-            await tr(
-              "Version v{n} has been saved and is awaiting admin approval. The public still sees v{m}."
-            )
-          )
-            .replace("{n}", String(doc.current_version))
-            .replace("{m}", String(doc.approved_version_number))}
-        </div>
-      )}
-
-      {!rendered.isOriginal && (
-        <div className="mb-4 rounded-lg border border-volt-200 bg-volt-50 p-3 text-sm text-volt-900 print:hidden">
-          🌐{" "}
-          {(
-            await tr(
-              "Auto-translated from {src} to {dst} via DeepL."
-            )
-          )
-            .replace("{src}", rendered.sourceLanguage.toUpperCase())
-            .replace("{dst}", rendered.language.toUpperCase())}
-          {" "}
-          {canEdit ? (
-            <T>
-              Editors see the source — change your language preference in the
-              nav to see the translation.
-            </T>
-          ) : (
-            <T>
-              The original text is authoritative; translations may differ
-              slightly.
-            </T>
-          )}
-        </div>
-      )}
-
-      {applicableFields.length > 0 && (
-        <div className="mb-4">
-          <MetadataPanel
-            documentId={doc.id}
-            fields={applicableFields}
-            values={metaValuesMap}
-            canEdit={canEdit}
-            labels={await buildMetadataLabels(tr)}
-          />
-        </div>
-      )}
-
-      <EditRightsPanel
-        documentId={doc.id}
-        currentUserId={user?.id ?? null}
-        currentUserCanEdit={canEdit}
-        isApprover={isApprover}
-        myOpenRequest={myOpenRequest}
-        pendingRequests={pendingRequests}
-        participants={participants}
-        labels={await buildEditRightsLabels(tr)}
-      />
-
+      {/*
+        Editor — the main event. Everything else on the page is small,
+        collapsed, or pushed into toasts so this block dominates the
+        viewport. DocumentWorkspace renders title + Tiptap + comments +
+        AI side-panel internally.
+      */}
       <DocumentWorkspace
         documentId={doc.id}
         initialTitle={displayTitle}
@@ -503,6 +351,103 @@ export default async function DocumentPage({
         labels={await buildWorkspaceLabels(tr, t)}
         commentsLabels={await buildCommentsLabels(tr)}
         aiLabels={await buildAILabels(tr)}
+      />
+
+      {/*
+        Below the editor: small collapsible accessory cards. All closed
+        by default so the editor stays the dominant block. Open them
+        when you actually need them.
+      */}
+      {applicableFields.length > 0 && (
+        <div className="mt-6">
+          <MetadataPanel
+            documentId={doc.id}
+            fields={applicableFields}
+            values={metaValuesMap}
+            canEdit={canEdit}
+            labels={await buildMetadataLabels(tr)}
+          />
+        </div>
+      )}
+
+      <div className="mt-6">
+        <EditRightsPanel
+          documentId={doc.id}
+          currentUserId={user?.id ?? null}
+          currentUserCanEdit={canEdit}
+          isApprover={isApprover}
+          myOpenRequest={myOpenRequest}
+          pendingRequests={pendingRequests}
+          participants={participants}
+          labels={await buildEditRightsLabels(tr)}
+        />
+      </div>
+
+      {/*
+        Danger zone — destructive action lives at the bottom, separated
+        from the everyday flow by whitespace + colour so it can't be
+        misclicked. Only rendered for users who would actually pass the
+        server-side authorization check anyway (admin / owner / scoped
+        policy_lead). The type-to-confirm modal inside the button adds
+        the second guard.
+      */}
+      {isApprover && (
+        <section
+          aria-labelledby="danger-zone-heading"
+          className="mt-12 rounded-lg border border-red-200 bg-red-50/50 p-5 print:hidden"
+        >
+          <h2
+            id="danger-zone-heading"
+            className="text-sm font-semibold text-red-800"
+          >
+            <T>Danger zone</T>
+          </h2>
+          <p className="mt-1 text-xs text-red-700">
+            <T>
+              Deleting this document is permanent. All versions, comments,
+              translations, amendments and citations attached to it go
+              with it.
+            </T>
+          </p>
+          <div className="mt-3">
+            <DeleteDocumentButton
+              documentId={doc.id}
+              documentTitle={doc.title}
+              labels={await buildDeleteLabels(tr)}
+            />
+          </div>
+        </section>
+      )}
+
+      {/*
+        Toast surface — fixed bottom-right. Replaces the four banners
+        that used to live above the editor. Toasts can be dismissed,
+        keep their state for the session, and never push the writing
+        area down.
+      */}
+      <DocPageToasts
+        documentId={doc.id}
+        documentSlug={doc.slug}
+        status={doc.status}
+        isApprover={isApprover}
+        reviewVersionNumber={doc.review_version_number ?? null}
+        approvedVersionNumber={doc.approved_version_number ?? null}
+        pendingReview={
+          hasPendingReview
+            ? {
+                currentVersion: doc.current_version,
+                approvedVersion: doc.approved_version_number!,
+                authorName: pendingAuthorName,
+                changeSummary: pendingChangeSummary,
+              }
+            : null
+        }
+        autoTranslate={
+          rendered.isOriginal
+            ? null
+            : { src: rendered.sourceLanguage, dst: rendered.language }
+        }
+        labels={await buildToastsLabels(tr)}
       />
     </div>
   );
@@ -900,6 +845,64 @@ async function buildEditRightsLabels(
     failed,
     requestedAt,
     decisionByTpl,
+  };
+}
+
+async function buildToastsLabels(
+  tr: (s: string) => Promise<string>
+): Promise<DocPageToastsLabels> {
+  const [
+    pendingHeading,
+    pendingBodyTpl,
+    pendingBodyTplNoAuthor,
+    approve,
+    reject,
+    busy,
+    rejectReasonPlaceholder,
+    confirmReject,
+    cancel,
+    viewDiffTpl,
+    reviewLockedHeading,
+    reviewLockedBodyTpl,
+    approverHeading,
+    approverBodyTpl,
+    autoTranslatedTpl,
+    dismiss,
+  ] = await Promise.all([
+    tr("Changes pending approval"),
+    tr("v{n} by {author} — public still sees v{m}."),
+    tr("v{n} saved — public still sees v{m}."),
+    tr("Approve"),
+    tr("Reject"),
+    tr("Busy…"),
+    tr("Why is this rejected? (optional, kept in audit log)"),
+    tr("Confirm reject"),
+    tr("Cancel"),
+    tr("Diff v{from} → v{to}"),
+    tr("Under review"),
+    tr("An admin is reviewing v{n}. Typing is locked for everyone."),
+    tr("Awaiting your approval"),
+    tr("You're reading frozen v{n}. Approve to publish or reject."),
+    tr("Auto-translated {src} → {dst} via DeepL"),
+    tr("Dismiss"),
+  ]);
+  return {
+    pendingHeading,
+    pendingBodyTpl,
+    pendingBodyTplNoAuthor,
+    approve,
+    reject,
+    busy,
+    rejectReasonPlaceholder,
+    confirmReject,
+    cancel,
+    viewDiffTpl,
+    reviewLockedHeading,
+    reviewLockedBodyTpl,
+    approverHeading,
+    approverBodyTpl,
+    autoTranslatedTpl,
+    dismiss,
   };
 }
 
