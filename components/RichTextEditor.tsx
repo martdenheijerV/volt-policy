@@ -69,6 +69,13 @@ interface Props {
   onSelectionRect?: (
     info: { text: string; viewportTop: number } | null
   ) => void;
+  /**
+   * Optional content rendered between the (sticky) toolbar and the
+   * scrolling editor body. Used by DocumentWorkspace to drop the doc
+   * title here, so the title scrolls with the content while the
+   * toolbar stays glued to the top.
+   */
+  headerSlot?: React.ReactNode;
   onAnchorClickInDoc?: (commentId: string) => void;
   realtime?: RealtimeConfig | null;
   /**
@@ -96,6 +103,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       onSelectionText,
       onCommentRequest,
       onSelectionRect,
+      headerSlot,
       onAnchorClickInDoc,
       realtime,
       onRemoteStatusChange,
@@ -392,19 +400,30 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
     }
 
     return (
-      <div className="rounded-b border-t border-slate-200 bg-white">
-        {realtime && (
-          <PresenceBar
-            connected={connected}
-            self={realtime.user}
-            peers={peers}
-          />
-        )}
-        {editable ? (
-          <Toolbar editor={editor} onCommentRequest={onCommentRequest} />
-        ) : (
-          <ReadOnlyBar editor={editor} onCommentRequest={onCommentRequest} />
-        )}
+      <div className="bg-white">
+        {/*
+          Sticky stack: PresenceBar (Live · MD avatars) + the formatting
+          toolbar are glued together and stick to the top of the
+          viewport while the user scrolls. The title (if a parent
+          passed one via headerSlot) and the editor body scroll past
+          underneath. Mirrors how Google Docs treats its formatting
+          toolbar — always reachable.
+        */}
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white">
+          {realtime && (
+            <PresenceBar
+              connected={connected}
+              self={realtime.user}
+              peers={peers}
+            />
+          )}
+          {editable ? (
+            <Toolbar editor={editor} onCommentRequest={onCommentRequest} />
+          ) : (
+            <ReadOnlyBar editor={editor} onCommentRequest={onCommentRequest} />
+          )}
+        </div>
+        {headerSlot}
         <EditorContent editor={editor} />
       </div>
     );
@@ -578,7 +597,7 @@ function Toolbar({
   const selectionEmpty = editor.state.selection.empty;
 
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur">
+    <div className="flex flex-wrap items-center gap-1 px-3 py-2">
       <Btn title="Bold (Ctrl+B)" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")}>
         <strong>B</strong>
       </Btn>

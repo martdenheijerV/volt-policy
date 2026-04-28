@@ -171,29 +171,13 @@ body {
     rgba(0, 0, 0, 0.06) 29.7cm
   );
 }
-/* Sticky header: title + Tiptap toolbar stick to the top of the
-   viewport as the user scrolls down through long content. */
-.paper-sticky-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: white;
-  border-top-left-radius: 2px;
-  border-top-right-radius: 2px;
-  border-bottom: 1px solid #e2e8f0;
-}
-.paper-sticky-header .paper-title {
-  padding: 1.25rem 2cm 0.5rem;
-}
-/* The Tiptap toolbar inside the sticky header — kill its own sticky
-   styling because the wrapper is already sticky. */
-.paper-sticky-header .ProseMirror,
+/* Editor body: holds Tiptap (sticky toolbar internal), title slot,
+   and the prose. The toolbar inside Tiptap handles its own sticky
+   positioning so we don't need a wrapper here. */
 .paper-body-prose .ProseMirror {
   outline: none;
   min-height: 60vh;
-}
-.paper-body-prose {
-  padding: 1.5cm 2cm 0;
+  padding: 1cm 2cm 0;
 }
 @media (max-width: 900px) {
   .editor-paper {
@@ -201,10 +185,7 @@ body {
     min-height: 60vh;
     box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
   }
-  .paper-sticky-header .paper-title {
-    padding: 1rem 1.25rem 0.5rem;
-  }
-  .paper-body-prose {
+  .paper-body-prose .ProseMirror {
     padding: 1rem 1.25rem 0;
   }
 }

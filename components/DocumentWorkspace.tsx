@@ -446,33 +446,23 @@ export default function DocumentWorkspace({
         {/* Editor stays mounted across view toggles to preserve cursor + content */}
         <div className={view === "edit" ? "" : "hidden"}>
           <div className="editor-paper">
-            {/*
-              Title + Tiptap toolbar — combined sticky header so they
-              stay glued to the top of the viewport while the user
-              scrolls long content. Tiptap renders its toolbar inside
-              the editor; we wrap it via CSS so the whole header sticks
-              as one unit.
-            */}
-            <div className="paper-sticky-header">
-              <div className="paper-title">
-                <label htmlFor="doc-title" className="sr-only">
-                  {labels.title}
-                </label>
-                <input
-                  id="doc-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={!canEdit}
-                  placeholder={labels.title}
-                  className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
-                />
-              </div>
-              {/* Tiptap toolbar will render itself inside the editor
-                  below; we let it dock into this header via the
-                  prose-mirror-wrapper rule. */}
-            </div>
             <div className="paper-body-prose">
               <RichTextEditor
+                headerSlot={
+                  <div className="px-[2cm] pt-6">
+                    <label htmlFor="doc-title" className="sr-only">
+                      {labels.title}
+                    </label>
+                    <input
+                      id="doc-title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      disabled={!canEdit}
+                      placeholder={labels.title}
+                      className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
+                    />
+                  </div>
+                }
             ref={editorRef}
             initialContent={initialContent}
             editable={canEdit}
