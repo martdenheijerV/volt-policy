@@ -14,7 +14,14 @@ import { formatDate } from "@/lib/utils";
 import type { Comment, CommentKind } from "@/lib/types";
 
 export interface CommentsPanelHandle {
-  startComment: (anchor: string) => void;
+  /**
+   * Open the compose form. `anchor` is the selected text (becomes the
+   * comment's anchor_quote). `top` is the vertical offset (px,
+   * relative to the comments-layer container) at which the compose
+   * card should float — passing it makes the card appear next to the
+   * selected text instead of at the top of the column.
+   */
+  startComment: (anchor: string, top?: number) => void;
   focusComment: (commentId: string) => void;
 }
 
@@ -91,6 +98,11 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     const [pending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
     const [replyTo, setReplyTo] = useState<string | null>(null);
+    // Vertical offset (px relative to comments-layer wrapper) at which
+    // the compose card floats. Set by startComment(text, top); cleared
+    // when the form closes. null = let the form sit in normal flow
+    // (e.g. for replies, which appear inside the parent thread card).
+    const [composeTop, setComposeTop] = useState<number | null>(null);
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const wrapperRef = useRef<HTMLElement>(null);
 
@@ -146,15 +158,14 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     }, [comments, tops]);
 
     useImperativeHandle(ref, () => ({
-      startComment(text: string) {
+      startComment(text: string, top?: number) {
         setAnchor(text);
         setReplyTo(null);
         setError(null);
+        // Float the compose card next to the selection if a vertical
+        // offset was passed; otherwise let it sit in normal flow.
+        setComposeTop(top ?? null);
         requestAnimationFrame(() => {
-          wrapperRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
           bodyRef.current?.focus();
         });
       },
@@ -181,6 +192,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           setBody("");
           setAnchor("");
           setReplyTo(null);
+          setComposeTop(null);
           // kind is fixed at "general" now — no setter needed.
           // Tell other clients to refresh their comment list. The
           // server action's revalidatePath only ever reaches *this*
@@ -238,7 +250,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     return (
       <aside
         ref={wrapperRef}
-        className="bg-transparent print:hidden"
+        className="relative bg-transparent print:hidden"
       >
         {/* Header removed per Mart's request — the "Reacties" heading
             and the always-visible compose form used to live here. */}
@@ -253,7 +265,20 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         )}
 
         {currentUserId && composeOpen ? (
-          <div className="mb-4 space-y-2 rounded-lg border bg-white p-3 shadow-md">
+          <div
+            style={
+              composeTop !== null
+                ? {
+                    position: "absolute",
+                    top: composeTop,
+                    left: 0,
+                    right: 0,
+                    zIndex: 30,
+                  }
+                : undefined
+            }
+            className="mb-4 space-y-2 rounded-lg border bg-white p-3 shadow-md"
+          >
             {replyTo ? (
               <div className="flex items-start gap-2 rounded border-l-4 border-slate-400 bg-slate-50 p-2 text-xs">
                 <div className="flex-1 italic text-slate-600">
@@ -261,7 +286,10 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 </div>
                 <button
                   type="button"
-                  onClick={() => setReplyTo(null)}
+                  onClick={() => {
+                    setReplyTo(null);
+                    setComposeTop(null);
+                  }}
                   aria-label={labels.cancelReply}
                   className="hover:underline"
                 >
@@ -282,7 +310,10 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 </div>
                 <button
                   type="button"
-                  onClick={() => setAnchor("")}
+                  onClick={() => {
+                    setAnchor("");
+                    setComposeTop(null);
+                  }}
                   aria-label={labels.removeAnchor}
                   className="text-volt-700 hover:underline"
                 >

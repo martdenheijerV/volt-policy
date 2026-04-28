@@ -385,7 +385,13 @@ export default function DocumentWorkspace({
           <button
             type="button"
             onClick={() => {
-              commentsRef.current?.startComment(selectionRect.text);
+              // Pass selection's vertical offset so the compose form
+              // floats next to the selected text, not at the top of
+              // the comments column. Mart's bug report.
+              commentsRef.current?.startComment(
+                selectionRect.text,
+                selectionRect.topInColumn
+              );
               setSelectionRect(null);
             }}
             aria-label={commentsLabels.comments}
