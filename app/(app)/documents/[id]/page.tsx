@@ -362,6 +362,11 @@ export default async function DocumentPage({
         labels={await buildWorkspaceLabels(tr, t)}
         commentsLabels={await buildCommentsLabels(tr)}
         aiLabels={await buildAILabels(tr)}
+        deleteLabels={
+          isApprover
+            ? { labels: await buildDeleteLabels(tr), title: doc.title }
+            : null
+        }
       />
 
       {/*
@@ -379,42 +384,6 @@ export default async function DocumentPage({
             labels={await buildMetadataLabels(tr)}
           />
         </div>
-      )}
-
-      {/*
-        Danger zone — destructive action lives at the bottom, separated
-        from the everyday flow by whitespace + colour so it can't be
-        misclicked. Only rendered for users who would actually pass the
-        server-side authorization check anyway (admin / owner / scoped
-        policy_lead). The type-to-confirm modal inside the button adds
-        the second guard.
-      */}
-      {isApprover && (
-        <section
-          aria-labelledby="danger-zone-heading"
-          className="mt-12 rounded-lg border border-red-200 bg-red-50/50 p-5 print:hidden"
-        >
-          <h2
-            id="danger-zone-heading"
-            className="text-sm font-semibold text-red-800"
-          >
-            <T>Danger zone</T>
-          </h2>
-          <p className="mt-1 text-xs text-red-700">
-            <T>
-              Deleting this document is permanent. All versions, comments,
-              translations, amendments and citations attached to it go
-              with it.
-            </T>
-          </p>
-          <div className="mt-3">
-            <DeleteDocumentButton
-              documentId={doc.id}
-              documentTitle={doc.title}
-              labels={await buildDeleteLabels(tr)}
-            />
-          </div>
-        </section>
       )}
 
       {/*

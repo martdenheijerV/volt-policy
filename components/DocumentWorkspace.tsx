@@ -15,6 +15,9 @@ import CommentsPanel, {
   type CommentsPanelLabels,
 } from "./CommentsPanel";
 import AIPanel, { type AIPanelLabels } from "./AIPanel";
+import DeleteDocumentButton, {
+  type DeleteDocumentButtonLabels,
+} from "./DeleteDocumentButton";
 import { autosaveDraft, updateStatus } from "@/app/(app)/documents/actions";
 import { contentToHtml, sanitizeHtml } from "@/lib/sanitize";
 import type { AnchorSpec } from "./AnchorHighlights";
@@ -91,6 +94,7 @@ export default function DocumentWorkspace({
   labels,
   commentsLabels,
   aiLabels,
+  deleteLabels,
 }: {
   documentId: string;
   initialTitle: string;
@@ -120,6 +124,13 @@ export default function DocumentWorkspace({
   labels: DocumentWorkspaceLabels;
   commentsLabels: CommentsPanelLabels;
   aiLabels: AIPanelLabels;
+  /**
+   * Labels + visibility for the destructive Delete action. Rendered next
+   * to the Archive button in the action bar — both are admin/owner/
+   * can_approve-only and live in the same cluster of "retire this doc"
+   * actions. Pass null to hide entirely.
+   */
+  deleteLabels: { labels: DeleteDocumentButtonLabels; title: string } | null;
 }) {
   // Role-based capability flags (mirrors server-side guards in actions.ts).
   // - Admin: governance — approve all docs, archive, manage.
@@ -555,6 +566,21 @@ export default function DocumentWorkspace({
                   >
                     {labels.archive}
                   </button>
+                )}
+                {/*
+                  Delete sits next to Archive — both are "retire this
+                  doc" actions, so they cluster naturally. The Delete
+                  button itself owns the type-to-confirm modal so a
+                  misclick can't wipe the doc; that gate is the safety
+                  net (was previously the only one — used to live in a
+                  separate Danger zone card below the editor).
+                */}
+                {deleteLabels && (
+                  <DeleteDocumentButton
+                    documentId={documentId}
+                    documentTitle={deleteLabels.title}
+                    labels={deleteLabels.labels}
+                  />
                 )}
               </div>
 
