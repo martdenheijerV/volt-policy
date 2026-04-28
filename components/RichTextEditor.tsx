@@ -36,6 +36,13 @@ export interface RichTextEditorHandle {
    * observer fires. Returns silently in non-realtime mode.
    */
   broadcastStatus: (next: string, byName: string) => void;
+  /**
+   * Tell every other client connected to this Hocuspocus room that the
+   * comments list changed (someone added / resolved / deleted a comment).
+   * Other clients observe `meta.commentsChanged` and refetch the comments
+   * server-side via router.refresh(). No payload — just a tick.
+   */
+  broadcastCommentsChanged: () => void;
 }
 
 interface RealtimeConfig {
@@ -60,6 +67,13 @@ interface Props {
    * we rely on the regular Next.js revalidation for the local browser.
    */
   onRemoteStatusChange?: (next: string, byName: string) => void;
+  /**
+   * Fires when another client on this Hocuspocus room signalled that
+   * comments changed. The parent typically calls router.refresh() to
+   * pull the new comment list — RLS keeps everyone honest about what
+   * they can see.
+   */
+  onRemoteCommentsChanged?: () => void;
 }
 
 const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
@@ -74,6 +88,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       onAnchorClickInDoc,
       realtime,
       onRemoteStatusChange,
+  onRemoteCommentsChanged,
     },
     ref
   ) {
@@ -193,22 +208,36 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
     // call onRemoteStatusChange so the parent can show a toast and
     // reload to pick up the new locked / unlocked state.
     useEffect(() => {
-      if (!realtime || !onRemoteStatusChange) return;
+      if (!realtime) return;
       const ydoc = ydocRef.current;
       if (!ydoc) return;
       const meta = ydoc.getMap("meta");
+      // One observer for the whole `meta` map — branches per key so a
+      // single Y.Doc round-trip can carry status changes, comment
+      // pings, and any future "this changed" signals.
       const observer = () => {
-        const t = meta.get("statusTransition") as
-          | { to?: string; byName?: string }
-          | undefined;
-        if (!t || typeof t.to !== "string") return;
-        onRemoteStatusChange(t.to, t.byName ?? "");
+        if (onRemoteStatusChange) {
+          const t = meta.get("statusTransition") as
+            | { to?: string; byName?: string }
+            | undefined;
+          if (t && typeof t.to === "string") {
+            onRemoteStatusChange(t.to, t.byName ?? "");
+          }
+        }
+        if (onRemoteCommentsChanged) {
+          const c = meta.get("commentsChanged") as
+            | { at?: number }
+            | undefined;
+          if (c && typeof c.at === "number") {
+            onRemoteCommentsChanged();
+          }
+        }
       };
       meta.observe(observer);
       return () => {
         meta.unobserve(observer);
       };
-    }, [realtime, onRemoteStatusChange]);
+    }, [realtime, onRemoteStatusChange, onRemoteCommentsChanged]);
 
     // First-time seed: when realtime is on and the Y.Doc is empty after sync,
     // load the saved HTML once so existing docs keep their content.
@@ -295,6 +324,14 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
             byName,
             at: new Date().toISOString(),
           });
+        },
+        broadcastCommentsChanged() {
+          const ydoc = ydocRef.current;
+          if (!ydoc) return;
+          const meta = ydoc.getMap("meta");
+          // Just a fresh timestamp — observers see "this changed",
+          // refresh, get the new comment list from the server.
+          meta.set("commentsChanged", { at: Date.now() });
         },
         scrollToAnchor(commentId: string) {
           if (!editor) return;
@@ -474,7 +511,16 @@ function Toolbar({
   }) => (
     <button
       type="button"
-      onClick={onClick}
+      // onMouseDown with preventDefault stops the editor losing focus
+      // when the user clicks a toolbar button. Without this, the first
+      // click steals focus → Tiptap's `.focus()` chain re-acquires it
+      // but the toggle command runs against an empty selection, so
+      // the user sees nothing change and clicks again. Two-clicks bug.
+      // Standard Tiptap toolbar pattern.
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
       title={title}
       aria-label={title}
       aria-pressed={active}

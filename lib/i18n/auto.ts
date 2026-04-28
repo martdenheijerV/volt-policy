@@ -80,6 +80,22 @@ async function callDeepL(text: string, lang: string): Promise<string> {
 }
 
 export async function autoTranslate(text: string, lang: string): Promise<string> {
+  // Belt-and-braces: any uncaught throw inside this function will surface
+  // as an RSC render error in the browser, which on a doc page that
+  // re-renders on every nav language flip can lock the user out (Mart
+  // saw exactly this — switch language a few times → "client side
+  // error" → can't open docs anymore). Wrap the whole pipeline in a
+  // single try/catch and fall back to the source string. We always
+  // return *something*.
+  try {
+    return await autoTranslateInner(text, lang);
+  } catch (e) {
+    console.error("[i18n.auto] autoTranslate failed, falling back to source:", e);
+    return text;
+  }
+}
+
+async function autoTranslateInner(text: string, lang: string): Promise<string> {
   if (!text) return text;
   const target = lang.toLowerCase();
   if (target === "en") return text; // English is the source

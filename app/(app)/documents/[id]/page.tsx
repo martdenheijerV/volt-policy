@@ -360,7 +360,7 @@ export default async function DocumentPage({
         canApproveThisDoc={canApproveThisDoc}
         canSendToReviewThisDoc={canSendToReviewThisDoc}
         labels={await buildWorkspaceLabels(tr, t)}
-        commentsLabels={await buildCommentsLabels(tr)}
+        commentsLabels={await buildCommentsLabels(tr, t, doc.status)}
         aiLabels={await buildAILabels(tr)}
         deleteLabels={
           isApprover
@@ -535,7 +535,9 @@ async function buildWorkspaceLabels(
 }
 
 async function buildCommentsLabels(
-  tr: (s: string) => Promise<string>
+  tr: (s: string) => Promise<string>,
+  t: (k: string) => string,
+  status: "draft" | "review" | "approved" | "archived"
 ): Promise<CommentsPanelLabels> {
   const [
     comments,
@@ -574,16 +576,16 @@ async function buildCommentsLabels(
     tr("Cancel reply"),
     tr("Anchored to"),
     tr("Remove anchor"),
-    tr("Select text in the editor and click 💬 Comment on selection."),
+    tr("comments.selectTextHint"),
     tr("Type:"),
     tr("Comment kind"),
     tr("General"),
     tr("Review"),
     tr("Suggestion"),
     tr("Comment body"),
-    tr("Type your reply…"),
-    tr("What about this passage?"),
-    tr("Add a general comment…"),
+    tr("comments.placeholderReply"),
+    tr("comments.placeholderAnchored"),
+    tr("comments.placeholderGeneral"),
     tr("Posting…"),
     tr("Post reply"),
     tr("Post comment"),
@@ -628,6 +630,10 @@ async function buildCommentsLabels(
     unknown,
     failedToAdd,
     failedToUpdate,
+    // Only emit the approved-notice for status='approved'. Other
+    // statuses get undefined → CommentsPanel skips the notice block.
+    approvedNotice:
+      status === "approved" ? t("comments.approvedNotice") : undefined,
   };
 }
 

@@ -276,6 +276,19 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/*
+        Approver inboxes at the very top — these are the actionable
+        items, the user shouldn't have to scroll past stats and recent
+        activity to see what's waiting on them.
+      */}
+      <div className="mt-8">
+        <ApproverInboxes
+          toReview={toReview}
+          incomingRequests={incomingRequests}
+          t={t}
+        />
+      </div>
+
       <div className="mt-8 grid gap-4 sm:grid-cols-4">
         {["draft", "review", "approved", "archived"].map((s) => (
           <div key={s} className="rounded-lg border bg-white p-4">
@@ -487,129 +500,151 @@ export default async function DashboardPage() {
         </section>
       </div>
 
-      {/*
-        Approver inboxes — two separate streams that approvers care
-        about, both shown side-by-side for consistency:
+    </div>
+  );
+}
 
-         * "Te reviewen" — documents in status='review' that this user
-           can approve. Click → the doc, where Approve / Reject lives.
-
-         * "Aanvragen die op jouw beslissing wachten" — edit-rights
-           requests this user can decide.
-
-        Both are always rendered (with an empty state) so the user
-        sees these queues exist even when nothing's waiting.
-      */}
-      <div className="mt-10 grid gap-6 lg:grid-cols-2">
-        <section
-          aria-labelledby="to-review-heading"
-          className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+/**
+ * Approver inbox grid — extracted to keep the main JSX readable. Two
+ * sections: docs awaiting your review, and edit-rights requests
+ * awaiting your decision. Always rendered (with empty states) so the
+ * user knows these queues exist even when empty. Lives at the top of
+ * the dashboard because these are the actionable items: act on them
+ * before scrolling to "what's been happening lately".
+ */
+function ApproverInboxes({
+  toReview,
+  incomingRequests,
+  t,
+}: {
+  toReview: {
+    id: string;
+    title: string;
+    document_type: string;
+    review_version_number: number | null;
+    pending_change_summary: string | null;
+    updated_at: string;
+  }[];
+  incomingRequests: {
+    id: string;
+    document_id: string;
+    document_title: string;
+    requester_name: string | null;
+    message: string | null;
+    created_at: string;
+  }[];
+  t: (k: string) => string;
+}) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <section
+        aria-labelledby="to-review-heading"
+        className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+      >
+        <h2
+          id="to-review-heading"
+          className="text-xl font-semibold text-amber-900"
         >
-          <h2
-            id="to-review-heading"
-            className="text-xl font-semibold text-amber-900"
-          >
-            {t("dashboard.toReviewHeading")}
-          </h2>
-          <p className="mt-1 text-sm text-amber-800">
-            {t("dashboard.toReviewSubtitle")}
-          </p>
-          {toReview.length === 0 ? (
-            <div className="mt-4 rounded border border-dashed border-amber-300 bg-white p-4 text-sm text-slate-500">
-              {t("dashboard.toReviewEmpty")}
-            </div>
-          ) : (
-            <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
-              {toReview.map((d) => (
-                <li key={d.id} className="px-4 py-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link
-                        href={`/documents/${d.id}`}
-                        className="font-medium text-volt-700 hover:underline"
-                      >
-                        {d.title}
-                      </Link>
-                      <div className="text-xs text-slate-600">
-                        {docTypeLabel(d.document_type)}
-                        {d.review_version_number
-                          ? ` · v${d.review_version_number}`
-                          : ""}
-                        {" · "}
-                        {t("dashboard.updated")} {formatDate(d.updated_at)}
-                      </div>
-                      {d.pending_change_summary && (
-                        <p className="mt-1 italic text-slate-700">
-                          “{d.pending_change_summary}”
-                        </p>
-                      )}
-                    </div>
+          {t("dashboard.toReviewHeading")}
+        </h2>
+        <p className="mt-1 text-sm text-amber-800">
+          {t("dashboard.toReviewSubtitle")}
+        </p>
+        {toReview.length === 0 ? (
+          <div className="mt-4 rounded border border-dashed border-amber-300 bg-white p-4 text-sm text-slate-500">
+            {t("dashboard.toReviewEmpty")}
+          </div>
+        ) : (
+          <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
+            {toReview.map((d) => (
+              <li key={d.id} className="px-4 py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <Link
                       href={`/documents/${d.id}`}
-                      className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                      className="font-medium text-volt-700 hover:underline"
                     >
-                      {t("dashboard.openForReview")}
+                      {d.title}
                     </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section
-          aria-labelledby="incoming-heading"
-          className="rounded-lg border border-amber-300 bg-amber-50 p-5"
-        >
-          <h2
-            id="incoming-heading"
-            className="text-xl font-semibold text-amber-900"
-          >
-            {t("dashboard.incomingRequestsHeading")}
-          </h2>
-          <p className="mt-1 text-sm text-amber-800">
-            {t("dashboard.incomingRequestsSubtitle")}
-          </p>
-          {incomingRequests.length === 0 ? (
-            <div className="mt-4 rounded border border-dashed border-amber-300 bg-white p-4 text-sm text-slate-500">
-              {t("dashboard.incomingRequestsEmpty")}
-            </div>
-          ) : (
-            <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
-              {incomingRequests.map((r) => (
-                <li key={r.id} className="px-4 py-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link
-                        href={`/documents/${r.document_id}`}
-                        className="font-medium text-volt-700 hover:underline"
-                      >
-                        {r.document_title}
-                      </Link>
-                      <div className="text-xs text-slate-600">
-                        {(t("dashboard.incomingRequestRowTpl"))
-                          .replace("{name}", r.requester_name ?? "—")
-                          .replace("{date}", formatDate(r.created_at))}
-                      </div>
-                      {r.message && (
-                        <p className="mt-1 italic text-slate-700">
-                          “{r.message}”
-                        </p>
-                      )}
+                    <div className="text-xs text-slate-600">
+                      {docTypeLabel(d.document_type)}
+                      {d.review_version_number
+                        ? ` · v${d.review_version_number}`
+                        : ""}
+                      {" · "}
+                      {t("dashboard.updated")} {formatDate(d.updated_at)}
                     </div>
+                    {d.pending_change_summary && (
+                      <p className="mt-1 italic text-slate-700">
+                        “{d.pending_change_summary}”
+                      </p>
+                    )}
+                  </div>
+                  <Link
+                    href={`/documents/${d.id}`}
+                    className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                  >
+                    {t("dashboard.openForReview")}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section
+        aria-labelledby="incoming-heading"
+        className="rounded-lg border border-amber-300 bg-amber-50 p-5"
+      >
+        <h2
+          id="incoming-heading"
+          className="text-xl font-semibold text-amber-900"
+        >
+          {t("dashboard.incomingRequestsHeading")}
+        </h2>
+        <p className="mt-1 text-sm text-amber-800">
+          {t("dashboard.incomingRequestsSubtitle")}
+        </p>
+        {incomingRequests.length === 0 ? (
+          <div className="mt-4 rounded border border-dashed border-amber-300 bg-white p-4 text-sm text-slate-500">
+            {t("dashboard.incomingRequestsEmpty")}
+          </div>
+        ) : (
+          <ul className="mt-4 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
+            {incomingRequests.map((r) => (
+              <li key={r.id} className="px-4 py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <Link
                       href={`/documents/${r.document_id}`}
-                      className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                      className="font-medium text-volt-700 hover:underline"
                     >
-                      {t("dashboard.decideOnDoc")}
+                      {r.document_title}
                     </Link>
+                    <div className="text-xs text-slate-600">
+                      {(t("dashboard.incomingRequestRowTpl"))
+                        .replace("{name}", r.requester_name ?? "—")
+                        .replace("{date}", formatDate(r.created_at))}
+                    </div>
+                    {r.message && (
+                      <p className="mt-1 italic text-slate-700">
+                        “{r.message}”
+                      </p>
+                    )}
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+                  <Link
+                    href={`/documents/${r.document_id}`}
+                    className="shrink-0 rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                  >
+                    {t("dashboard.decideOnDoc")}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

@@ -49,6 +49,11 @@ export interface CommentsPanelLabels {
   unknown: string;
   failedToAdd: string;
   failedToUpdate: string;
+  /**
+   * Optional notice rendered at the top of the panel when the doc is
+   * approved (locked). Falsy = don't render the notice.
+   */
+  approvedNotice?: string;
 }
 
 interface Props {
@@ -57,6 +62,12 @@ interface Props {
   currentUserId: string | null;
   activeCommentId?: string | null;
   onAnchorClick?: (commentId: string) => void;
+  /**
+   * Called after any successful comment mutation (add / resolve / reopen).
+   * The parent typically broadcasts a Y.Doc ping so other connected
+   * editors refresh their comment list without needing F5.
+   */
+  onCommentsChanged?: () => void;
   labels: CommentsPanelLabels;
 }
 
@@ -68,6 +79,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       currentUserId,
       activeCommentId,
       onAnchorClick,
+      onCommentsChanged,
       labels,
     },
     ref
@@ -118,6 +130,11 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           setAnchor("");
           setReplyTo(null);
           setKind("general");
+          // Tell other clients to refresh their comment list. The
+          // server action's revalidatePath only ever reaches *this*
+          // browser; this Y.Doc ping reaches everyone else in the
+          // Hocuspocus room.
+          onCommentsChanged?.();
         } catch (e) {
           setError(e instanceof Error ? e.message : labels.failedToAdd);
         }
@@ -128,6 +145,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       startTransition(async () => {
         try {
           await resolveComment(id, !resolved);
+          onCommentsChanged?.();
         } catch (e) {
           setError(e instanceof Error ? e.message : labels.failedToUpdate);
         }
@@ -164,6 +182,21 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         className="rounded-lg border bg-white p-4 shadow-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-auto print:hidden"
       >
         <h2 className="text-lg font-semibold">{labels.comments}</h2>
+
+        {/*
+          Approved-doc notice: when the doc is locked because it's been
+          approved, surface the reason here so a user looking at a
+          read-only editor doesn't wonder why they can't type. Comments
+          remain open — that's the whole point of leaving them visible.
+        */}
+        {labels.approvedNotice && (
+          <p
+            role="note"
+            className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800"
+          >
+            {labels.approvedNotice}
+          </p>
+        )}
 
         {currentUserId ? (
           <div className="mt-3 space-y-2">

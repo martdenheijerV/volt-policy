@@ -320,6 +320,17 @@ export default function DocumentWorkspace({
     [router, labels.status, labels.remoteStatusTpl]
   );
 
+  // Live comments. When this client adds/resolves a comment, broadcast
+  // a tick on the shared Y.Doc meta map. When other clients see the
+  // tick they refresh server-side and pick up the new comment list.
+  const handleLocalCommentsChanged = useCallback(() => {
+    editorRef.current?.broadcastCommentsChanged();
+    router.refresh();
+  }, [router]);
+  const handleRemoteCommentsChanged = useCallback(() => {
+    router.refresh();
+  }, [router]);
+
   // Auto-dismiss the toast after 6s.
   useEffect(() => {
     if (!remoteToast) return;
@@ -381,26 +392,27 @@ export default function DocumentWorkspace({
 
         {/* Editor stays mounted across view toggles to preserve cursor + content */}
         <div className={view === "edit" ? "" : "hidden"}>
-          <div className="px-6 pt-6">
-            {/*
-              No visible "TITLE" label — modern editors (Google Docs,
-              Notion, Linear) just use the input itself as the title row.
-              The visually-hidden label keeps screen readers happy.
-            */}
-            <label htmlFor="doc-title" className="sr-only">
-              {labels.title}
-            </label>
-            <input
-              id="doc-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={!canEdit}
-              placeholder={labels.title}
-              className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
-            />
-          </div>
-
-          <RichTextEditor
+          {/*
+            A4-paper styling: the .editor-page wrapper paints a soft
+            grey "desk" behind the editor, and .editor-paper renders
+            the actual writing surface as a white card with paper-style
+            shadow + a faint horizontal rule every ~A4-height to hint
+            at page breaks. Inspired by Google Docs.
+          */}
+          <div className="editor-page">
+            <div className="editor-paper">
+              <label htmlFor="doc-title" className="sr-only">
+                {labels.title}
+              </label>
+              <input
+                id="doc-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={!canEdit}
+                placeholder={labels.title}
+                className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
+              />
+              <RichTextEditor
             ref={editorRef}
             initialContent={initialContent}
             editable={canEdit}
@@ -410,6 +422,7 @@ export default function DocumentWorkspace({
             onCommentRequest={handleCommentRequest}
             onAnchorClickInDoc={handleAnchorClickInDoc}
             onRemoteStatusChange={handleRemoteStatusChange}
+            onRemoteCommentsChanged={handleRemoteCommentsChanged}
             realtime={
               realtimeUrl && realtimeToken && currentUserId && currentUserName
                 ? {
@@ -424,6 +437,8 @@ export default function DocumentWorkspace({
                 : null
             }
           />
+            </div>
+          </div>
 
           {/*
             Action bar visibility split from canEdit so approvers (admin /
@@ -623,6 +638,7 @@ export default function DocumentWorkspace({
           currentUserId={currentUserId}
           activeCommentId={activeCommentId}
           onAnchorClick={handleAnchorClick}
+          onCommentsChanged={handleLocalCommentsChanged}
           labels={commentsLabels}
         />
         <AIPanel

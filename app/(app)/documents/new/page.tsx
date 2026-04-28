@@ -135,25 +135,6 @@ export default async function NewDocumentPage() {
           />
         </div>
 
-        <fieldset className="space-y-2 rounded border border-slate-200 p-4">
-          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {optionalFeaturesLabel}
-          </legend>
-          <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              name="citations_enabled"
-              className="mt-1 h-4 w-4 rounded border-slate-300"
-            />
-            <span>
-              <span className="font-medium">{citationsLabel}</span>
-              <span className="mt-1 block text-xs text-slate-500">
-                {citationsHint}
-              </span>
-            </span>
-          </label>
-        </fieldset>
-
         {universal.length > 0 && (
           <fieldset className="space-y-3 rounded border border-slate-200 p-4">
             <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -180,6 +161,33 @@ export default async function NewDocumentPage() {
             placeholder={contentPh}
           />
         </div>
+
+        {/*
+          Optional features sit after the content field so the form
+          flows in order of importance: title → type/lang → purpose →
+          tags → custom metadata → content → optional add-ons. By the
+          time the editor reaches this fieldset they've made the
+          content decisions; toggling 'Enable citations' here just
+          decorates an already-written doc.
+        */}
+        <fieldset className="space-y-2 rounded border border-slate-200 p-4">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {optionalFeaturesLabel}
+          </legend>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              name="citations_enabled"
+              className="mt-1 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              <span className="font-medium">{citationsLabel}</span>
+              <span className="mt-1 block text-xs text-slate-500">
+                {citationsHint}
+              </span>
+            </span>
+          </label>
+        </fieldset>
 
         <div className="flex gap-3">
           <button
