@@ -29,10 +29,22 @@ export default async function NewDocumentPage() {
     string
   >;
 
-  const [purposePh, tagsPh, contentPh] = await Promise.all([
+  const [
+    purposePh,
+    tagsPh,
+    contentPh,
+    optionalFeaturesLabel,
+    citationsLabel,
+    citationsHint,
+  ] = await Promise.all([
     tr("Why does this document exist?"),
     tr("climate, eu, trade (comma-separated)"),
     tr("# Heading\n\nYour policy text…"),
+    tr("Optional features"),
+    tr("Enable citations / bibliography"),
+    tr(
+      "Adds a Citations tab to the document. Use it when you want to formally reference sources with a [@cite_key] in the body and an auto-rendered bibliography on export. Most docs don't need this — leave off for plain hyperlink references."
+    ),
   ]);
 
   return (
@@ -122,6 +134,25 @@ export default async function NewDocumentPage() {
             placeholder={tagsPh}
           />
         </div>
+
+        <fieldset className="space-y-2 rounded border border-slate-200 p-4">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {optionalFeaturesLabel}
+          </legend>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              name="citations_enabled"
+              className="mt-1 h-4 w-4 rounded border-slate-300"
+            />
+            <span>
+              <span className="font-medium">{citationsLabel}</span>
+              <span className="mt-1 block text-xs text-slate-500">
+                {citationsHint}
+              </span>
+            </span>
+          </label>
+        </fieldset>
 
         {universal.length > 0 && (
           <fieldset className="space-y-3 rounded border border-slate-200 p-4">

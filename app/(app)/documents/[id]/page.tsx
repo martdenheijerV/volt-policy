@@ -261,12 +261,22 @@ export default async function DocumentPage({
           >
             {t("doc.amendments")}
           </Link>
-          <Link
-            href={`/documents/${doc.id}/citations`}
-            className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
-          >
-            {t("doc.citations")}
-          </Link>
+          {/*
+            Citations is opt-in per document (set at creation, stored on
+            documents.citations_enabled). Only show the tab when the
+            doc actually uses formal cite_key references — keeps the
+            toolbar clean for the 95% of docs that just hyperlink in
+            prose. The page itself remains reachable via direct URL for
+            anyone who needs to flip through old data.
+          */}
+          {doc.citations_enabled && (
+            <Link
+              href={`/documents/${doc.id}/citations`}
+              className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-50"
+            >
+              {t("doc.citations")}
+            </Link>
+          )}
           {discussion?.url ? (
             <a
               href={discussion.url}

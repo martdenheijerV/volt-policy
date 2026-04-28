@@ -93,6 +93,12 @@ export interface Document {
   approved_version_number: number | null;
   /** Snapshot pointer: while status='review', the version the admin reviews. */
   review_version_number: number | null;
+  /**
+   * Opt-in flag for the citations / bibliography feature. False for
+   * everyday docs that just hyperlink in prose; true for docs that
+   * formally cite academic / institutional sources.
+   */
+  citations_enabled: boolean;
   created_at: string;
   updated_at: string;
   approved_at: string | null;

@@ -62,6 +62,9 @@ export async function createDocument(formData: FormData) {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
+  // Optional features the editor toggled on at creation time. The
+  // checkbox sends "on" when checked, nothing when unchecked.
+  const citations_enabled = formData.get("citations_enabled") === "on";
 
   if (!title) throw new Error("Title is required");
 
@@ -108,6 +111,7 @@ export async function createDocument(formData: FormData) {
       // autosave-first model, V1 is the first admin/lead sign-off — not
       // the "save count". A fresh draft has no version yet by design.
       current_version: 0,
+      citations_enabled,
     })
     .select("id")
     .single();
