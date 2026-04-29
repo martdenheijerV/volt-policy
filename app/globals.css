@@ -205,8 +205,10 @@ body {
 .paper-body-prose .ProseMirror {
   outline: none;
   min-height: 60vh;
-  /* Paper is 820px wide, writing area 624px → 98px padding each side. */
-  padding: 1cm 98px 0;
+  /* Paper is 820px wide, writing area 624px → 98px padding each side.
+     Top is 2cm — the A4 top margin lives directly on the prose now
+     that the separate title slot has been removed. */
+  padding: 2cm 98px 0;
   /*
    * Tiptap's editorProps add `prose-doc` to the ProseMirror element so
    * h1/h2/p styling applies inside the editor. But `.prose-doc` also

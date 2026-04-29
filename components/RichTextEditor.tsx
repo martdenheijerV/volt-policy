@@ -9,6 +9,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import PageBreaksExtension from "./PageBreaksExtension";
+import FontSizeExtension from "./FontSizeExtension";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import {
@@ -184,6 +185,8 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
         // Pushes top-level blocks past the visual A4 page break drawn
         // by the .editor-paper gradient — see PageBreaksExtension.ts.
         PageBreaksExtension as AnyExtension,
+        // Inline font-size dropdown — see FontSizeExtension.ts.
+        FontSizeExtension as AnyExtension,
       ];
       if (realtime && ydocRef.current && providerRef.current) {
         base.push(
@@ -632,6 +635,50 @@ function Toolbar({
       <Btn title="Strikethrough" onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")}>
         <span className="line-through">S</span>
       </Btn>
+
+      <Divider />
+
+      {/*
+        Font-size dropdown — Word-style. Reads the current selection's
+        size attribute (set by the FontSizeExtension); writing a new
+        value applies it via setFontSize, the empty option clears
+        the mark so the text falls back to the prose default.
+      */}
+      <label className="sr-only" htmlFor="font-size-select">Font size</label>
+      <select
+        id="font-size-select"
+        title="Font size"
+        value={(editor.getAttributes("fontSize").fontSize as string) || ""}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "") {
+            editor.chain().focus().unsetFontSize().run();
+          } else {
+            editor.chain().focus().setFontSize(v).run();
+          }
+        }}
+        className="rounded border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-volt-500"
+      >
+        <option value="">Size</option>
+        {[
+          "10px",
+          "12px",
+          "14px",
+          "16px",
+          "18px",
+          "20px",
+          "24px",
+          "28px",
+          "32px",
+          "36px",
+          "48px",
+          "64px",
+        ].map((s) => (
+          <option key={s} value={s}>
+            {s.replace("px", "")}
+          </option>
+        ))}
+      </select>
 
       <Divider />
 

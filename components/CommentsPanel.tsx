@@ -79,6 +79,12 @@ export interface CommentsPanelLabels {
   showInline?: string;
   /** Empty state shown in the Resolved tab when there are no resolved comments. */
   noResolved?: string;
+  /**
+   * Shown in place of the anchor quote when the original text the
+   * comment was anchored to has been deleted from the document.
+   * Falls back to a neutral English string if not provided.
+   */
+  originalDeleted?: string;
 }
 
 interface Props {
@@ -110,6 +116,15 @@ interface Props {
    * pill keeps inviting the user to open something that's open.
    */
   onViewModeChange?: (mode: "anchored" | "all") => void;
+  /**
+   * Plain-text snapshot of the document body. Used to detect
+   * "orphaned" comments — ones whose anchor_quote no longer appears
+   * anywhere in the live document (the user deleted the original
+   * text). Orphaned anchored cards are hidden from the document
+   * surface; in the show-all panel they're rendered with an
+   * "Original content deleted" badge instead of the missing quote.
+   */
+  documentText?: string;
 }
 
 const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
@@ -124,6 +139,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       labels,
       hidePill = false,
       onViewModeChange,
+      documentText = "",
     },
     ref
   ) {
@@ -357,6 +373,20 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     const resolved = tree.tops.filter((c) => c.resolved);
 
     /*
+      A comment is "orphaned" when it has an anchor_quote but that
+      quote no longer appears anywhere in the live document — the
+      user deleted the original text. We hide orphans from the
+      anchored surface (no text to anchor to) and surface them in
+      the show-all panel labelled "Original content deleted".
+    */
+    const isOrphaned = (c: Comment): boolean => {
+      if (!c.anchor_quote) return false;
+      if (!documentText) return false;
+      return !documentText.includes(c.anchor_quote);
+    };
+    const orphanedLabel = labels.originalDeleted ?? "Original content deleted";
+
+    /*
       Compose form is only shown after the user explicitly invokes
       startComment (via the floating "+" on selection). When idle,
       the panel renders just the anchored comment cards.
@@ -572,6 +602,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                     labels={labels}
                     anchorOffset={null}
                     replyForm={replyTo === c.id ? composeFormJsx : null}
+                    orphanedLabel={isOrphaned(c) ? orphanedLabel : null}
                   />
                 ))}
               </ul>
@@ -703,7 +734,15 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
             {open.length === 0 && (
               <li className="text-sm text-slate-500">{labels.noOpen}</li>
             )}
-            {open.map((c) => (
+            {/*
+              Orphaned comments (anchor text deleted) get filtered out
+              of the anchored surface — there's nothing in the
+              document to anchor them next to. They're still visible
+              in the show-all view, where they're labelled.
+            */}
+            {open
+              .filter((c) => !isOrphaned(c))
+              .map((c) => (
               <CommentThread
                 key={c.id}
                 top={c}
@@ -716,6 +755,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 labels={labels}
                 anchorOffset={tops[c.id] ?? null}
                 replyForm={replyTo === c.id ? composeFormJsx : null}
+                orphanedLabel={null}
               />
             ))}
           </ul>
@@ -736,6 +776,7 @@ function CommentThread({
   labels,
   anchorOffset,
   replyForm,
+  orphanedLabel,
 }: {
   top: Comment;
   replies: Comment[];
@@ -756,6 +797,13 @@ function CommentThread({
    * of the panel.
    */
   replyForm?: React.ReactNode;
+  /**
+   * When non-null, the original anchored text has been deleted from
+   * the document. We render this label in place of the (missing)
+   * quote so the show-all panel still gives context. Anchored mode
+   * never receives this prop set — it filters orphans out entirely.
+   */
+  orphanedLabel?: string | null;
 }) {
   const hasAnchor = !!top.anchor_quote;
   const handleJump = () => {
@@ -807,15 +855,22 @@ function CommentThread({
         </span>
         <span>{formatDate(top.created_at)}</span>
       </div>
-      {top.anchor_quote && (
-        <div className="mb-2 flex items-center gap-1 border-l-2 border-volt-400 pl-2 text-xs italic text-slate-600">
-          <span className="text-volt-700">↪</span>
-          &ldquo;
-          {top.anchor_quote.length > 140
-            ? top.anchor_quote.slice(0, 140) + "…"
-            : top.anchor_quote}
-          &rdquo;
+      {orphanedLabel ? (
+        <div className="mb-2 flex items-center gap-1 border-l-2 border-slate-300 pl-2 text-xs italic text-slate-500">
+          <span aria-hidden>⚠</span>
+          {orphanedLabel}
         </div>
+      ) : (
+        top.anchor_quote && (
+          <div className="mb-2 flex items-center gap-1 border-l-2 border-volt-400 pl-2 text-xs italic text-slate-600">
+            <span className="text-volt-700">↪</span>
+            &ldquo;
+            {top.anchor_quote.length > 140
+              ? top.anchor_quote.slice(0, 140) + "…"
+              : top.anchor_quote}
+            &rdquo;
+          </div>
+        )
       )}
       <p className="whitespace-pre-wrap text-slate-800">{top.body}</p>
 

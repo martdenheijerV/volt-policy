@@ -217,6 +217,55 @@ export default function DocumentWorkspace({
     [comments]
   );
 
+  /*
+    Plain-text snapshot of the live editor content. CommentsPanel
+    uses this to detect orphaned comments — ones whose anchor text
+    has been removed from the document. We strip tags + collapse
+    whitespace so a quote like "policy on data" still matches even
+    if the editor renders it inside <p><strong>policy on data</strong></p>.
+  */
+  const documentText = useMemo(
+    () =>
+      contentHtml
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    [contentHtml]
+  );
+
+  /*
+    Auto-derive the persisted document title from the live HTML.
+    Word-style: there's no separate title field — whatever the user
+    styles as their first heading (or, if no heading, the first
+    visible line) becomes the doc's title for the dashboard list,
+    library URL, etc. Empty docs keep an "Untitled" fallback.
+  */
+  function deriveTitleFromHtml(html: string): string {
+    if (!html) return "Untitled";
+    const heading = html.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
+    if (heading) {
+      const text = heading[1]
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .trim();
+      if (text) return text.slice(0, 200);
+    }
+    const stripped = html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (stripped) return stripped.slice(0, 80);
+    return "Untitled";
+  }
+  // Keep the title state in sync with content. The autosave below
+  // picks up `title` automatically the next time it fires.
+  useEffect(() => {
+    const next = deriveTitleFromHtml(contentHtml);
+    setTitle((prev) => (prev === next ? prev : next));
+  }, [contentHtml]);
+
   const dirty = title !== savedTitle || contentHtml !== savedHtml;
 
   /*
@@ -566,21 +615,14 @@ export default function DocumentWorkspace({
                     )}
                   </div>
                 }
-                headerSlot={
-                  <div className="px-[98px] pt-[2cm]">
-                    <label htmlFor="doc-title" className="sr-only">
-                      {labels.title}
-                    </label>
-                    <input
-                      id="doc-title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      disabled={!canEdit}
-                      placeholder={labels.title}
-                      className="w-full border-0 px-0 py-1 text-4xl font-bold tracking-tight placeholder:text-slate-300 focus:outline-none focus:ring-0 disabled:bg-transparent"
-                    />
-                  </div>
-                }
+                /*
+                  Title slot intentionally omitted. Mart wanted a
+                  pure word-doc — no separate title input above the
+                  prose, just type and style your own heading. The
+                  document's persisted `title` field is auto-derived
+                  from the first heading (or first line) on autosave;
+                  see `deriveTitleFromHtml` below.
+                */
             ref={editorRef}
             initialContent={initialContent}
             editable={canEdit}
@@ -828,6 +870,7 @@ export default function DocumentWorkspace({
           labels={commentsLabels}
           hidePill={toolbarStuck}
           onViewModeChange={setCommentsViewMode}
+          documentText={documentText}
         />
       </div>
       </div>
