@@ -196,6 +196,16 @@ body {
   min-height: 60vh;
   /* Paper is 820px wide, writing area 624px → 98px padding each side. */
   padding: 1cm 98px 0;
+  /*
+   * Tiptap's editorProps add `prose-doc` to the ProseMirror element so
+   * h1/h2/p styling applies inside the editor. But `.prose-doc` also
+   * carries `max-width: 72ch` (intended for the read-only library
+   * viewer), which would clamp the editable area to ~640px and pin
+   * it to the left of the 820px paper — leaving asymmetric whitespace
+   * on the right. Override here so the editor uses the full paper
+   * width and the 98px side padding is symmetric.
+   */
+  max-width: none;
 }
 @media (max-width: 900px) {
   .editor-paper {
