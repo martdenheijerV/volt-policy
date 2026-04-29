@@ -1,3 +1,5 @@
+import type { Node as PMNode } from "@tiptap/pm/model";
+
 /**
  * Anchor encoding for comment quotes.
  *
@@ -174,6 +176,61 @@ export function encodeAnchor(
 export function anchorDisplayWord(quote: string | null | undefined): string {
   if (!quote) return "";
   return parseAnchor(quote).displayWord;
+}
+
+/**
+ * Build the canonical flat text + PM-position map for a doc.
+ *
+ * Both makeUniqueAnchor (which slices a unique context window out of
+ * the flat text) and AnchorHighlights (which locates that context in
+ * the live doc and decorates the matched range) MUST agree on what
+ * the flat text looks like, character for character. If they used
+ * different flat representations — e.g. textBetween for one,
+ * descendants() for the other — a context produced by makeUnique
+ * could fail to match in AnchorHighlights even though the surface
+ * text looks identical, because of differences in how each treats
+ * block boundaries (lists, headings, blockquotes).
+ *
+ * Single source of truth: walk descendants in document order, copy
+ * every text node character-by-character (recording PM position for
+ * each), and insert one space at every block boundary. Identical to
+ * the previous AnchorHighlights internal logic, just lifted out so
+ * the editor side can reuse it.
+ */
+export function buildFlatDoc(doc: PMNode): {
+  flat: string;
+  map: number[];
+} {
+  let flat = "";
+  const map: number[] = [];
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text) {
+      for (let i = 0; i < node.text.length; i++) {
+        flat += node.text[i];
+        map.push(pos + i);
+      }
+    } else if (node.isBlock && flat.length > 0 && !flat.endsWith(" ")) {
+      flat += " ";
+      map.push(pos);
+    }
+  });
+  return { flat, map };
+}
+
+/**
+ * Locate a ProseMirror position inside the flat text produced by
+ * `buildFlatDoc`. Uses the position map to find the first flat-text
+ * index whose underlying PM position is at or after `fromPos`.
+ * Exact, no separator-math drift.
+ */
+export function flatOffsetForPos(
+  map: number[],
+  fromPos: number
+): number {
+  for (let i = 0; i < map.length; i++) {
+    if (map[i] >= fromPos) return i;
+  }
+  return map.length;
 }
 
 /**

@@ -29,7 +29,7 @@ import {
   type AnchorSpec,
 } from "./AnchorHighlights";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { encodeAnchor } from "@/lib/anchor";
+import { buildFlatDoc, encodeAnchor, flatOffsetForPos } from "@/lib/anchor";
 
 /**
  * Build a stable comment anchor from the user's current selection.
@@ -61,63 +61,78 @@ function makeUniqueAnchor(
 ): string {
   if (!selectedText) return selectedText;
 
-  // Same flat-text view AnchorHighlights uses for matching — block
-  // separator " " keeps offsets aligned.
-  const flat = doc.textBetween(0, doc.content.size, " ");
-  const charOffset = doc.textBetween(0, fromPos, " ").length;
+  // Use the SAME flat representation AnchorHighlights uses, so a
+  // context window we cut here is character-for-character what the
+  // matcher will look for later. The position map gives us an exact
+  // flat-text offset for the selection start — no textBetween
+  // separator drift, no off-by-N guesswork.
+  const { flat, map } = buildFlatDoc(doc);
+  const hintOffset = flatOffsetForPos(map, fromPos);
 
-  // Verify charOffset really points at the start of selectedText in
-  // flat. If not (rare — happens when a node treats block-boundary
-  // separators differently), bail to plain storage.
-  const probe = flat.substr(charOffset, selectedText.length);
-  if (probe !== selectedText) return selectedText;
+  // Find every occurrence of selectedText, pick the one nearest the
+  // hint. If the word doesn't appear at all in flat (shouldn't
+  // happen — the user just selected it), fall back to plain.
+  let actualOffset = -1;
+  let bestDist = Infinity;
+  let firstIdx = -1;
+  let secondIdx = -1;
+  let scan = 0;
+  while (scan <= flat.length) {
+    const idx = flat.indexOf(selectedText, scan);
+    if (idx === -1) break;
+    if (firstIdx === -1) firstIdx = idx;
+    else if (secondIdx === -1) secondIdx = idx;
+    const dist = Math.abs(idx - hintOffset);
+    if (dist < bestDist) {
+      bestDist = dist;
+      actualOffset = idx;
+    }
+    scan = idx + 1;
+  }
+  if (actualOffset === -1) return selectedText;
 
-  // Already unique? No need to encode.
-  const firstIdx = flat.indexOf(selectedText);
-  if (firstIdx === -1) return selectedText;
-  const secondIdx = flat.indexOf(selectedText, firstIdx + 1);
+  // Only one occurrence in the whole doc → no ambiguity, store plain.
+  // (firstIdx is set, secondIdx never assigned.)
   if (secondIdx === -1) return selectedText;
 
-  // Grow prefix + suffix until the *full window* (prefix + word +
-  // suffix) is unique in the doc. Cap at 240 chars so a pasted-twice
-  // paragraph doesn't blow up the stored anchor.
+  // Grow a prefix + suffix window around the chosen occurrence
+  // until that window appears exactly once in `flat`. Capped at
+  // 240 chars so a pasted-twice paragraph doesn't blow up the
+  // stored anchor.
   const STEP = 8;
   const MAX_WINDOW = 240;
   let prefixLen = 0;
   let suffixLen = 0;
-  const maxPrefix = charOffset;
-  const maxSuffix = flat.length - charOffset - selectedText.length;
+  const maxPrefix = actualOffset;
+  const maxSuffix = flat.length - actualOffset - selectedText.length;
 
-  // Always make at least one extension pass — even an 8-char prefix
-  // dramatically reduces collision rate, and the matcher uses the
-  // context anyway.
   while (prefixLen + selectedText.length + suffixLen < MAX_WINDOW) {
     const nextPrefix = Math.min(maxPrefix, prefixLen + STEP);
     const nextSuffix = Math.min(maxSuffix, suffixLen + STEP);
     if (nextPrefix === prefixLen && nextSuffix === suffixLen) {
-      // No room left to grow on either side — give up, encode
-      // whatever we've got. Highlight will still pin to whatever
-      // single occurrence still matches in the live doc.
+      // No room left to grow on either side. Encode what we have —
+      // matcher will still pin to whichever single occurrence still
+      // matches in the live doc, and that beats plain-mode silent
+      // wrong-occurrence highlighting.
       break;
     }
     prefixLen = nextPrefix;
     suffixLen = nextSuffix;
 
-    const start = charOffset - prefixLen;
-    const end = charOffset + selectedText.length + suffixLen;
+    const start = actualOffset - prefixLen;
+    const end = actualOffset + selectedText.length + suffixLen;
     const context = flat.slice(start, end);
     if (flat.indexOf(context) === flat.lastIndexOf(context)) {
       return encodeAnchor(selectedText, prefixLen, context);
     }
   }
 
-  // Could not make the window unique within MAX_WINDOW. Encode anyway
-  // — the matcher will pick whichever context occurrence still
-  // exists; if there are still multiple, it picks the first, but
-  // that's no worse than the plain-anchor failure mode and we keep
-  // the displayWord readable in the UI.
-  const start = charOffset - prefixLen;
-  const end = charOffset + selectedText.length + suffixLen;
+  // Couldn't shrink to a single match within MAX_WINDOW. Encode
+  // best-effort context anyway — at least the highlight goes
+  // through the encoded path (one decoration, not three) instead
+  // of painting every duplicate yellow.
+  const start = actualOffset - prefixLen;
+  const end = actualOffset + selectedText.length + suffixLen;
   const context = flat.slice(start, end);
   if (context === selectedText) return selectedText;
   return encodeAnchor(selectedText, prefixLen, context);

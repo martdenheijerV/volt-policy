@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { parseAnchor } from "@/lib/anchor";
+import { buildFlatDoc, parseAnchor } from "@/lib/anchor";
 
 export interface AnchorSpec {
   id: string;
@@ -27,23 +27,11 @@ function buildDecorations(
   const decos: Decoration[] = [];
   const hits: AnchorHit[] = [];
 
-  // Build a flat plain-text view of the document to allow matching anchors that
-  // span multiple text nodes (e.g. a selection across two paragraphs).
-  // We keep a parallel array of mappings from string offset -> ProseMirror pos.
-  let flat = "";
-  const map: number[] = [];
-  doc.descendants((node, pos) => {
-    if (node.isText && node.text) {
-      for (let i = 0; i < node.text.length; i++) {
-        flat += node.text[i];
-        map.push(pos + i);
-      }
-    } else if (node.isBlock && flat.length > 0 && !flat.endsWith(" ")) {
-      // Tiptap's textBetween uses a single space separator across blocks.
-      flat += " ";
-      map.push(pos);
-    }
-  });
+  // Single source of truth for the flat-text view + PM-position map.
+  // Lives in lib/anchor.ts so the editor side (makeUniqueAnchor) and
+  // this matcher side cut/lookup against character-identical strings
+  // — that's how an encoded context window stays findable here.
+  const { flat, map } = buildFlatDoc(doc);
 
   // Plain-anchor cap so a generic quote like "Hee" or "the" can't
   // paint half the document yellow (Mart's earlier bug report —
