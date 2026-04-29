@@ -506,55 +506,59 @@ export default function DocumentWorkspace({
                       visible while the toolbar is docked at the top
                       of the viewport. Mirrors the in-column pill so
                       the affordance stays reachable even when the
-                      user has scrolled deep into a long doc. The
-                      transition smooths the swap with the in-column
-                      pill (which fades opposite via opacity).
+                      user has scrolled deep into a long doc.
+
+                      Rendered conditionally (rather than animated
+                      from w-0 to full width) because the width
+                      transition during scroll caused the toolbar to
+                      reflow on every frame, which made scrolling
+                      feel janky. The smooth visual swap still works:
+                      the in-column pill fades out via opacity while
+                      this one snaps in instantly — feels like one
+                      crossfade because the column pill's transition
+                      runs ~200ms.
                     */}
-                    <button
-                      type="button"
-                      onClick={() => commentsRef.current?.openShowAll()}
-                      aria-label={
-                        commentsLabels.showAllComments ??
-                        commentsLabels.allCommentsTitle ??
-                        commentsLabels.comments
-                      }
-                      title={
-                        commentsLabels.showAllComments ??
-                        commentsLabels.allCommentsTitle ??
-                        commentsLabels.comments
-                      }
-                      className={`inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 ${
-                        toolbarStuck
-                          ? "translate-x-0 opacity-100"
-                          : "pointer-events-none w-0 -translate-x-2 overflow-hidden border-0 px-0 py-0 opacity-0"
-                      }`}
-                      aria-hidden={!toolbarStuck}
-                      tabIndex={toolbarStuck ? 0 : -1}
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
+                    {toolbarStuck && (
+                      <button
+                        type="button"
+                        onClick={() => commentsRef.current?.openShowAll()}
+                        aria-label={
+                          commentsLabels.showAllComments ??
+                          commentsLabels.allCommentsTitle ??
+                          commentsLabels.comments
+                        }
+                        title={
+                          commentsLabels.showAllComments ??
+                          commentsLabels.allCommentsTitle ??
+                          commentsLabels.comments
+                        }
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
                       >
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
-                      </svg>
-                      {commentsLabels.showAllComments ??
-                        commentsLabels.allCommentsTitle ??
-                        commentsLabels.comments}
-                      {topLevelCommentCount > 0 && (
-                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
-                          {topLevelCommentCount}
-                        </span>
-                      )}
-                    </button>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <line x1="3" y1="6" x2="21" y2="6" />
+                          <line x1="3" y1="12" x2="21" y2="12" />
+                          <line x1="3" y1="18" x2="21" y2="18" />
+                        </svg>
+                        {commentsLabels.showAllComments ??
+                          commentsLabels.allCommentsTitle ??
+                          commentsLabels.comments}
+                        {topLevelCommentCount > 0 && (
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                            {topLevelCommentCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 }
                 headerSlot={

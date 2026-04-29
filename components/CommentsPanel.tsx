@@ -605,10 +605,11 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
             aria-label={showAllLabel}
             title={showAllLabel}
             // mr-[160px] shifts the pill 160px to the left from the
-            // right edge of the comments column — Mart wanted more
-            // breathing room between the pill and the canvas edge so
-            // it sits closer to the editor's AI button visually.
-            className="mr-[160px] inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+            // right edge of the comments column so it sits closer to
+            // the editor's AI button visually. px-5 + py-1.5 + gap-2
+            // give the pill a bit more breathing room than the old
+            // tight px-3 sizing.
+            className="mr-[160px] inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
           >
             <svg
               width="12"
