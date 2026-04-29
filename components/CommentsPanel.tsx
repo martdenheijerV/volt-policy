@@ -201,13 +201,34 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       }
       window.addEventListener("scroll", onScroll, true);
       window.addEventListener("resize", onScroll);
+
+      // Re-run gravity when any card's height changes — e.g. the user
+      // expands a thread by clicking "Reply" and the inline compose
+      // form pushes the card taller. Without this, subsequent cards
+      // keep their old absolute `top` and visually overlap until the
+      // next scroll event triggers a remeasure.
+      let resizeObserver: ResizeObserver | null = null;
+      if (typeof ResizeObserver !== "undefined" && wrapperRef.current) {
+        resizeObserver = new ResizeObserver(() => {
+          cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(measure);
+        });
+        resizeObserver.observe(wrapperRef.current);
+        // Observe each card individually so size changes inside a
+        // card (replies open, content edits, attachments load) are
+        // caught even if the wrapper itself doesn't reflow.
+        wrapperRef.current
+          .querySelectorAll<HTMLElement>("[data-comment-card]")
+          .forEach((el) => resizeObserver!.observe(el));
+      }
       return () => {
         cancelAnimationFrame(rafInitial);
         cancelAnimationFrame(raf);
         window.removeEventListener("scroll", onScroll, true);
         window.removeEventListener("resize", onScroll);
+        resizeObserver?.disconnect();
       };
-    }, [comments, viewMode]);
+    }, [comments, viewMode, replyTo]);
 
     useImperativeHandle(ref, () => ({
       startComment(text: string, top?: number) {

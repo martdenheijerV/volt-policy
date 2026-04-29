@@ -118,7 +118,7 @@ body {
   padding: 1.5rem 1rem;
 }
 .paper-stack {
-  max-width: 1180px;
+  max-width: 1280px;
   width: 100%;
 }
 .paper-and-comments {
@@ -129,7 +129,7 @@ body {
 .paper-column {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 820px;
+  max-width: 900px;
 }
 .comments-layer {
   position: relative;
@@ -149,7 +149,7 @@ body {
 }
 .editor-paper {
   width: 100%;
-  max-width: 820px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 0 0 2cm;
   border-radius: 2px;
@@ -194,7 +194,7 @@ body {
 .paper-body-prose .ProseMirror {
   outline: none;
   min-height: 60vh;
-  padding: 1cm 2cm 0;
+  padding: 1cm 1.5cm 0;
 }
 @media (max-width: 900px) {
   .editor-paper {

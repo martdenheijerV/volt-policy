@@ -406,8 +406,13 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
       );
     }
 
+    // No background-color on the outer wrapper — the parent
+    // .editor-paper paints a repeating gradient (white pages with a
+    // grey gap every 29.7cm to mimic Google Docs' page-break visual).
+    // Setting bg-white here would cover that gradient and the page
+    // break would never be visible.
     return (
-      <div className="bg-white">
+      <div>
         {/*
           Sticky stack: PresenceBar (Live · MD avatars) + the formatting
           toolbar are glued together and stick to the top of the
