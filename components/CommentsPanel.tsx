@@ -572,9 +572,17 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         className="relative bg-transparent print:hidden"
       >
         {/*
-          Floating "Show all comments" pill — sits at the top of the
-          comments column in its default state. Clicking flips the
-          panel into the scrollable tabs view.
+          Floating "Show all comments" pill — sits in the comments
+          column at the same vertical height as the AI button in the
+          editor's formatting toolbar. Clicking flips the panel into
+          the scrollable tabs view.
+
+          The mt-[80px] offset lines the pill up with the toolbar
+          row, since the comments column starts higher up (at the
+          paper-column's "Bewerken / Voorbeeld" toggle row). Math:
+          ~40px toggle row + ~32px PresenceBar + ~8px toolbar inner
+          padding ≈ 80px down from the top of the comments-layer
+          puts the pill centered on the AI button.
 
           When `hidePill` is true the parent has detected that the
           editor's sticky toolbar has docked at the top of the
@@ -584,7 +592,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           on opacity/transform smooths the swap.
         */}
         <div
-          className={`mb-2 flex justify-end transition-all duration-200 ${
+          className={`mb-2 mt-[80px] flex justify-end transition-all duration-200 ${
             hidePill
               ? "pointer-events-none -translate-y-1 opacity-0"
               : "translate-y-0 opacity-100"
