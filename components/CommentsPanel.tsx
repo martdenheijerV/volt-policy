@@ -557,8 +557,15 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           Floating "Show all comments" pill — sits above the first
           floating card. Clicking flips the panel into the scrollable
           tabs view.
+
+          Sticky at top:0 so it stays glued to the top of the viewport
+          while the user scrolls — matches the editor's PresenceBar /
+          toolbar on the left, which also pin to top:0. z-30 keeps it
+          above the absolutely-positioned comment cards. The bg color
+          matches the editor canvas (#e8eaed) so cards scrolling past
+          underneath don't bleed through.
         */}
-        <div className="mb-2 flex justify-end">
+        <div className="sticky top-0 z-30 mb-2 flex justify-end bg-[#e8eaed] py-2">
           <button
             type="button"
             onClick={() => setViewMode("all")}
