@@ -28,6 +28,62 @@ import {
   anchorFlashMetaKey,
   type AnchorSpec,
 } from "./AnchorHighlights";
+import type { Node as PMNode } from "@tiptap/pm/model";
+
+/**
+ * Extend a selected substring with surrounding document context until
+ * it occurs exactly once in the doc, so a comment placed on the second
+ * "Maastricht" doesn't end up highlighted next to the first one. The
+ * extended string is stored as the comment's anchor_quote.
+ *
+ * The trade-off: highlights cover slightly more text than the user
+ * literally selected, and the anchor becomes a bit more fragile to
+ * edits (rephrasing the surrounding sentence orphans the comment).
+ * That's worth it because the alternative — wrong-occurrence
+ * highlighting — silently mis-attributes feedback, which is a much
+ * worse failure mode.
+ */
+function makeUniqueAnchor(
+  selectedText: string,
+  fromPos: number,
+  doc: PMNode
+): string {
+  if (!selectedText) return selectedText;
+  // Build the same flat text representation AnchorHighlights uses for
+  // matching — block separator " " keeps offsets aligned.
+  const flat = doc.textBetween(0, doc.content.size, " ");
+  const charOffset = doc.textBetween(0, fromPos, " ").length;
+
+  // Already unique? No work to do.
+  const firstIdx = flat.indexOf(selectedText);
+  if (firstIdx === -1) return selectedText;
+  const secondIdx = flat.indexOf(selectedText, firstIdx + 1);
+  if (secondIdx === -1) return selectedText;
+
+  // Otherwise grow prefix + suffix in lockstep until the candidate is
+  // unique. Capped at 200 total chars so a freshly-pasted long
+  // duplicated paragraph doesn't blow up the stored anchor.
+  const STEP = 8;
+  const MAX = 200;
+  let prefixLen = 0;
+  let suffixLen = 0;
+  let candidate = selectedText;
+
+  while (prefixLen + suffixLen < MAX) {
+    prefixLen = Math.min(charOffset, prefixLen + STEP);
+    suffixLen = Math.min(
+      flat.length - charOffset - selectedText.length,
+      suffixLen + STEP
+    );
+    const start = charOffset - prefixLen;
+    const end = charOffset + selectedText.length + suffixLen;
+    candidate = flat.slice(start, end);
+    const a = flat.indexOf(candidate);
+    if (a === flat.lastIndexOf(candidate)) return candidate;
+    if (start === 0 && end >= flat.length) return candidate;
+  }
+  return candidate;
+}
 
 export interface RichTextEditorHandle {
   scrollToAnchor: (commentId: string) => void;
@@ -220,11 +276,17 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
             onSelectionRect?.(null);
             return;
           }
-          const text = editor.state.doc.textBetween(from, to, " ").trim();
+          const rawText = editor.state.doc
+            .textBetween(from, to, " ")
+            .trim();
+          // Resolve duplicate-anchor problem: when the user selects
+          // a word like "Maastricht" that appears more than once in
+          // the doc, the bare anchor would always match the first
+          // occurrence. We extend the anchor with surrounding text
+          // until it's unique, so the highlight + floating card
+          // land at the occurrence the user actually clicked.
+          const text = makeUniqueAnchor(rawText, from, editor.state.doc);
           onSelectionText(text);
-          // Compute viewport-top of the selection's first character so
-          // the parent (DocumentWorkspace) can position a floating
-          // "+ Comment" affordance next to it.
           try {
             const coords = editor.view.coordsAtPos(from);
             onSelectionRect?.({ text, viewportTop: coords.top });
@@ -615,7 +677,10 @@ function Toolbar({
       window.alert("Select some text first to anchor a comment to it.");
       return;
     }
-    const text = editor.state.doc.textBetween(from, to, " ").trim();
+    const rawText = editor.state.doc.textBetween(from, to, " ").trim();
+    // Same disambiguation as the floating "+" button uses — see the
+    // makeUniqueAnchor comment in onSelectionUpdate above.
+    const text = makeUniqueAnchor(rawText, from, editor.state.doc);
     onCommentRequest(text);
   }
 
@@ -661,18 +726,18 @@ function Toolbar({
       >
         <option value="">Size</option>
         {[
+          "8px",
+          "9px",
           "10px",
+          "11px",
           "12px",
           "14px",
-          "16px",
           "18px",
-          "20px",
           "24px",
-          "28px",
-          "32px",
+          "30px",
           "36px",
           "48px",
-          "64px",
+          "60px",
         ].map((s) => (
           <option key={s} value={s}>
             {s.replace("px", "")}
