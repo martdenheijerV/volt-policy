@@ -193,6 +193,11 @@ export default function DocumentWorkspace({
   */
   const stickySentinelRef = useRef<HTMLDivElement>(null);
   const [toolbarStuck, setToolbarStuck] = useState(false);
+  // Mirror of CommentsPanel's viewMode so we can hide the toolbar
+  // "Show all" pill when the show-all sidebar is already open.
+  const [commentsViewMode, setCommentsViewMode] = useState<
+    "anchored" | "all"
+  >("anchored");
   useEffect(() => {
     const sentinel = stickySentinelRef.current;
     if (!sentinel || typeof IntersectionObserver === "undefined") return;
@@ -518,7 +523,7 @@ export default function DocumentWorkspace({
                       crossfade because the column pill's transition
                       runs ~200ms.
                     */}
-                    {toolbarStuck && (
+                    {toolbarStuck && commentsViewMode !== "all" && (
                       <button
                         type="button"
                         onClick={() => commentsRef.current?.openShowAll()}
@@ -822,6 +827,7 @@ export default function DocumentWorkspace({
           onCommentsChanged={handleLocalCommentsChanged}
           labels={commentsLabels}
           hidePill={toolbarStuck}
+          onViewModeChange={setCommentsViewMode}
         />
       </div>
       </div>

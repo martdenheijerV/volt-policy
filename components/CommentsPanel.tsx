@@ -102,6 +102,14 @@ interface Props {
    * visual noise.
    */
   hidePill?: boolean;
+  /**
+   * Called whenever the panel switches between "anchored" (floating
+   * cards next to text) and "all" (sidebar list). The parent uses
+   * this to hide the toolbar-mounted "Show all comments" pill once
+   * the show-all sidebar is already open — otherwise the toolbar
+   * pill keeps inviting the user to open something that's open.
+   */
+  onViewModeChange?: (mode: "anchored" | "all") => void;
 }
 
 const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
@@ -115,6 +123,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       onCommentsChanged,
       labels,
       hidePill = false,
+      onViewModeChange,
     },
     ref
   ) {
@@ -133,6 +142,13 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     // editor (default); "all" = stacked, scrollable list with tabs for
     // Open/Resolved (Mart's Google-Docs-style sidebar request).
     const [viewMode, setViewMode] = useState<"anchored" | "all">("anchored");
+    // Notify the parent (DocumentWorkspace) every time the panel
+    // toggles. Parent uses this to hide the toolbar-mounted pill
+    // when the sidebar is open, so the user isn't staring at a
+    // "Show all comments" trigger for something already showing.
+    useEffect(() => {
+      onViewModeChange?.(viewMode);
+    }, [viewMode, onViewModeChange]);
     const [allFilter, setAllFilter] = useState<"open" | "resolved">("open");
     const bodyRef = useRef<HTMLTextAreaElement>(null);
     const wrapperRef = useRef<HTMLElement>(null);

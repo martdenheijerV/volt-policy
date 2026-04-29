@@ -124,7 +124,14 @@ body {
 .paper-and-comments {
   display: flex;
   gap: 1.5rem;
-  align-items: flex-start;
+  /* `stretch` (default) so .comments-layer matches the height of
+     .paper-column. That gives the show-all comments panel a tall
+     sticky containing block — without it, sticky un-sticks ~200px
+     in (the .comments-layer's own min-height) and the panel scrolls
+     away. We previously used `flex-start`; not needed because
+     absolute-positioned cards inside the layer don't depend on
+     their parent's height. */
+  align-items: stretch;
 }
 .paper-column {
   flex: 1 1 auto;
