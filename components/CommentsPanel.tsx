@@ -23,6 +23,12 @@ export interface CommentsPanelHandle {
    */
   startComment: (anchor: string, top?: number) => void;
   focusComment: (commentId: string) => void;
+  /**
+   * Switch the panel into the scrollable "Show all comments" tab view.
+   * Called from outside (e.g. the duplicate pill we render inside the
+   * editor toolbar when scrolled past the default pill location).
+   */
+  openShowAll: () => void;
 }
 
 export interface CommentsPanelLabels {
@@ -88,6 +94,14 @@ interface Props {
    */
   onCommentsChanged?: () => void;
   labels: CommentsPanelLabels;
+  /**
+   * When true, suppress the inline "Show all comments" pill at the
+   * top of the anchored-mode panel. The parent has scrolled past the
+   * pill's natural position and now renders an equivalent pill inside
+   * the editor's sticky toolbar instead — rendering both would be
+   * visual noise.
+   */
+  hidePill?: boolean;
 }
 
 const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
@@ -100,6 +114,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       onAnchorClick,
       onCommentsChanged,
       labels,
+      hidePill = false,
     },
     ref
   ) {
@@ -251,6 +266,9 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           `[data-comment-card="${commentId}"]`
         );
         node?.scrollIntoView({ behavior: "smooth", block: "center" });
+      },
+      openShowAll() {
+        setViewMode("all");
       },
     }));
 
@@ -554,21 +572,25 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
         className="relative bg-transparent print:hidden"
       >
         {/*
-          Floating "Show all comments" pill — sits above the first
-          floating card. Clicking flips the panel into the scrollable
-          tabs view.
+          Floating "Show all comments" pill — sits at the top of the
+          comments column in its default state. Clicking flips the
+          panel into the scrollable tabs view.
 
-          Sticky at top:40px so the default position aligns with the
-          editor's formatting toolbar row (the AI-robot button on the
-          right), not with the PresenceBar above it. As the user
-          scrolls down past the first comment, the pill stays glued
-          there. z-30 keeps it above the absolutely-positioned comment
-          cards. bg-[#e8eaed] matches the editor canvas so cards
-          scrolling past underneath don't bleed through. The
-          transition-all class smooths position changes if the
-          editor's PresenceBar appears/disappears mid-session.
+          When `hidePill` is true the parent has detected that the
+          editor's sticky toolbar has docked at the top of the
+          viewport, and is rendering an equivalent pill *inside* the
+          toolbar (next to the AI button) — so we suppress this one
+          to avoid showing two pills at the same time. The transition
+          on opacity/transform smooths the swap.
         */}
-        <div className="sticky top-[40px] z-30 mb-2 flex justify-end bg-[#e8eaed] py-2 transition-all duration-200">
+        <div
+          className={`mb-2 flex justify-end transition-all duration-200 ${
+            hidePill
+              ? "pointer-events-none -translate-y-1 opacity-0"
+              : "translate-y-0 opacity-100"
+          }`}
+          aria-hidden={hidePill}
+        >
           <button
             type="button"
             onClick={() => setViewMode("all")}

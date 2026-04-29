@@ -181,6 +181,36 @@ export default function DocumentWorkspace({
   const paperColumnRef = useRef<HTMLDivElement>(null);
   const commentsRef = useRef<CommentsPanelHandle>(null);
   const editorRef = useRef<RichTextEditorHandle>(null);
+  /*
+    Sentinel-driven detection of whether the editor's sticky toolbar
+    has docked to the top of the viewport. We place a 1px-tall element
+    just above the editor paper; when an IntersectionObserver reports
+    that the sentinel is no longer intersecting the viewport, we know
+    the user has scrolled past it and the toolbar is in its sticky
+    state. While stuck, the in-column "Show all comments" pill fades
+    out and an equivalent pill appears in the toolbar next to the AI
+    button — matches the "default vs scroll" design Mart sketched.
+  */
+  const stickySentinelRef = useRef<HTMLDivElement>(null);
+  const [toolbarStuck, setToolbarStuck] = useState(false);
+  useEffect(() => {
+    const sentinel = stickySentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setToolbarStuck(!entry.isIntersecting),
+      { threshold: 0, rootMargin: "0px 0px 0px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
+  // Top-level comment count for the "(n)" badge on the show-all pill.
+  // Only top-level comments count — replies are nested under their
+  // parent thread and don't contribute to the headline number.
+  const topLevelCommentCount = useMemo(
+    () => comments.filter((c) => !c.parent_id).length,
+    [comments]
+  );
 
   const dirty = title !== savedTitle || contentHtml !== savedHtml;
 
@@ -452,16 +482,80 @@ export default function DocumentWorkspace({
 
         {/* Editor stays mounted across view toggles to preserve cursor + content */}
         <div className={view === "edit" ? "" : "hidden"}>
+          {/*
+            Sentinel — invisible 1px element directly above the editor
+            paper. The IntersectionObserver in the parent watches this
+            and flips `toolbarStuck` once it scrolls out of view, which
+            in turn fades the in-column "Show all comments" pill out
+            and renders an equivalent pill inside the editor toolbar.
+          */}
+          <div ref={stickySentinelRef} aria-hidden style={{ height: 1 }} />
           <div className="editor-paper">
             <div className="paper-body-prose">
               <RichTextEditor
                 toolbarTrailingSlot={
-                  <ToolbarAIMenu
-                    documentId={documentId}
-                    contentHtml={contentHtml}
-                    language={language}
-                    labels={aiLabels}
-                  />
+                  <div className="flex items-center gap-2">
+                    <ToolbarAIMenu
+                      documentId={documentId}
+                      contentHtml={contentHtml}
+                      language={language}
+                      labels={aiLabels}
+                    />
+                    {/*
+                      Toolbar-mounted "Show all comments" pill — only
+                      visible while the toolbar is docked at the top
+                      of the viewport. Mirrors the in-column pill so
+                      the affordance stays reachable even when the
+                      user has scrolled deep into a long doc. The
+                      transition smooths the swap with the in-column
+                      pill (which fades opposite via opacity).
+                    */}
+                    <button
+                      type="button"
+                      onClick={() => commentsRef.current?.openShowAll()}
+                      aria-label={
+                        commentsLabels.showAllComments ??
+                        commentsLabels.allCommentsTitle ??
+                        commentsLabels.comments
+                      }
+                      title={
+                        commentsLabels.showAllComments ??
+                        commentsLabels.allCommentsTitle ??
+                        commentsLabels.comments
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 ${
+                        toolbarStuck
+                          ? "translate-x-0 opacity-100"
+                          : "pointer-events-none w-0 -translate-x-2 overflow-hidden border-0 px-0 py-0 opacity-0"
+                      }`}
+                      aria-hidden={!toolbarStuck}
+                      tabIndex={toolbarStuck ? 0 : -1}
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                      </svg>
+                      {commentsLabels.showAllComments ??
+                        commentsLabels.allCommentsTitle ??
+                        commentsLabels.comments}
+                      {topLevelCommentCount > 0 && (
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                          {topLevelCommentCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 }
                 headerSlot={
                   <div className="px-[98px] pt-[2cm]">
@@ -723,6 +817,7 @@ export default function DocumentWorkspace({
           onAnchorClick={handleAnchorClick}
           onCommentsChanged={handleLocalCommentsChanged}
           labels={commentsLabels}
+          hidePill={toolbarStuck}
         />
       </div>
       </div>
