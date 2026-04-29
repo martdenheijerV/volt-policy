@@ -151,7 +151,11 @@ body {
   width: 100%;
   max-width: 820px;
   margin: 0 auto;
-  padding: 0 0 2cm;
+  /* A4 export-friendly vertical margins: 2cm top + 2cm bottom inside
+     the white paper. Horizontal margins live on .ProseMirror (98px each
+     side → 624px writing area). The toolbar lives inside the paper but
+     is sticky, so it floats out of this padding when scrolling. */
+  padding: 2cm 0;
   border-radius: 2px;
   min-height: 29.7cm;
   position: relative;

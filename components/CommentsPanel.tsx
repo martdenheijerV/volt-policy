@@ -558,14 +558,17 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           floating card. Clicking flips the panel into the scrollable
           tabs view.
 
-          Sticky at top:0 so it stays glued to the top of the viewport
-          while the user scrolls — matches the editor's PresenceBar /
-          toolbar on the left, which also pin to top:0. z-30 keeps it
-          above the absolutely-positioned comment cards. The bg color
-          matches the editor canvas (#e8eaed) so cards scrolling past
-          underneath don't bleed through.
+          Sticky at top:40px so the default position aligns with the
+          editor's formatting toolbar row (the AI-robot button on the
+          right), not with the PresenceBar above it. As the user
+          scrolls down past the first comment, the pill stays glued
+          there. z-30 keeps it above the absolutely-positioned comment
+          cards. bg-[#e8eaed] matches the editor canvas so cards
+          scrolling past underneath don't bleed through. The
+          transition-all class smooths position changes if the
+          editor's PresenceBar appears/disappears mid-session.
         */}
-        <div className="sticky top-0 z-30 mb-2 flex justify-end bg-[#e8eaed] py-2">
+        <div className="sticky top-[40px] z-30 mb-2 flex justify-end bg-[#e8eaed] py-2 transition-all duration-200">
           <button
             type="button"
             onClick={() => setViewMode("all")}

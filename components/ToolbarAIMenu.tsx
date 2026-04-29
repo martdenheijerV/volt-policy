@@ -50,12 +50,35 @@ export default function ToolbarAIMenu({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={labels.heading}
         title={labels.heading}
-        className={`rounded px-2 py-1 text-sm hover:bg-slate-100 ${
-          open ? "bg-slate-900 text-white hover:bg-slate-900" : ""
+        className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm font-medium hover:bg-slate-100 ${
+          open ? "bg-volt-600 text-white hover:bg-volt-700" : "text-volt-700"
         }`}
       >
-        🤖
+        {/*
+          Sparkles icon (the standard mark for "AI assistant" across
+          GitHub Copilot, Notion AI, Google Docs Help me write, etc).
+          Inline SVG instead of the previous 🤖 emoji because emoji
+          rendering is inconsistent across OSes/fonts and was showing
+          as an empty box for some users. Two stars: a large 4-pointed
+          star + a small one — the visual shorthand for "magic / AI".
+        */}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+          <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+        </svg>
+        <span>AI</span>
       </button>
       {open && (
         <div

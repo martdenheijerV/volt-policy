@@ -464,7 +464,7 @@ export default function DocumentWorkspace({
                   />
                 }
                 headerSlot={
-                  <div className="px-[98px] pt-6">
+                  <div className="px-[98px]">
                     <label htmlFor="doc-title" className="sr-only">
                       {labels.title}
                     </label>
