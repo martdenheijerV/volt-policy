@@ -1,45 +1,43 @@
 /**
  * PageBreaksExtension
  *
- * Tiptap / ProseMirror extension that inserts visual page breaks so a
- * top-level block (paragraph, heading, list item, blockquote, etc.)
- * never straddles the grey gap between A4 pages drawn by
- * `.editor-paper`'s repeating-linear-gradient.
+ * Tiptap / ProseMirror extension that pushes top-level blocks past
+ * the grey gap drawn by `.editor-paper`'s repeating-linear-gradient,
+ * so no text ever renders into either the bottom margin (last 2cm of
+ * a page) or the gap between pages — matches Word's "no widow lines
+ * past the writable area" behaviour.
  *
- * Why "natural position" matters
- * ------------------------------
- * The naive version compared each node's *measured* top (the position
- * we see in the DOM) to the page boundaries. That deadlocks: once we
- * push a node by setting `margin-top: 122px`, its measured top moves
- * past the boundary, the next pass concludes "no straddle, remove
- * the decoration", which un-pushes the node, which puts it back on
- * the boundary, which re-pushes it. Result: 60Hz flicker.
+ * Why "preMyMargin" position
+ * --------------------------
+ * The naive version compared each node's *measured* (current) top to
+ * the page boundaries. That causes a 60Hz flicker: pushing a node by
+ * 122px moves its measured top past the boundary, the next pass
+ * concludes "no straddle, drop the decoration", which un-pushes the
+ * node, putting it back on the boundary, which re-pushes it.
  *
- * The fix is to subtract any margin we've previously applied (both
- * to the current node and to all preceding nodes) from the measured
- * position to get the node's *natural* position — where it would sit
- * if our extension didn't exist. The straddle test runs on the
- * natural position, which is invariant across measurement rounds, so
- * the computed `marginNeeded` is the same every round and the
- * signature dedup short-circuits the dispatch loop.
+ * The fix is to compute the position the node would be at if its OWN
+ * decoration didn't apply (but preceding decorations still did) —
+ * we call this the *preMyMargin* top. That value is invariant across
+ * measurement rounds, so the computed `newMargin` is identical every
+ * round and the signature dedup short-circuits the dispatch loop.
  *
- * Coordinate space
- * ----------------
- * The page-gap gradient lives on `.editor-paper` (the white sheet),
- * NOT on the ProseMirror element directly — the toolbar and title
- * slot sit between paper-top and ProseMirror-top. We measure
- * positions relative to the paper element, so the boundaries (every
- * 1146px = 29.7cm + 24px gap) line up with the gradient stripes.
+ *   measuredTop  = preMyMarginTop + myMargin     // what we see now
+ *   preMyMarginTop = measuredTop - myMargin       // stable across rounds
+ *
+ * Page indices are computed from preMyMarginTop, which lives in
+ * rendered (paper) coordinates — exactly the space the gradient
+ * stripes are painted in, so the indices line up with what the user
+ * sees.
  *
  * Trade-offs
  * ----------
- *  - A single block taller than one writable page (giant image,
- *    massive code block) will still straddle — there's no way to
- *    break a single ProseMirror node mid-element without a much
- *    bigger pagination plugin that splits content.
- *  - Re-measurement runs on every transaction inside an rAF, so the
- *    cost is bounded to roughly one getBoundingClientRect per
- *    top-level child per frame. Well under 1ms for typical docs.
+ *  - A single block taller than one writable page (~970px) will
+ *    still straddle: there's no way to break a single ProseMirror
+ *    node mid-element without a much bigger pagination plugin that
+ *    splits content across visual pages.
+ *  - Re-measurement only runs on actual doc changes (not selection
+ *    changes), inside an rAF, with a 3px hysteresis on margin
+ *    updates — so the editor stays smooth while typing.
  */
 
 import { Extension } from "@tiptap/core";
@@ -51,11 +49,13 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 const PAGE_CYCLE_PX = 1146;
 // White page itself (without the 24px grey gap).
 const PAGE_HEIGHT_PX = 1122;
-// 2cm A4 top + bottom margins inside each page. The writable area
-// of page N runs [N * PAGE_CYCLE_PX + TOP_MARGIN_PX,
-// N * PAGE_CYCLE_PX + PAGE_HEIGHT_PX - BOTTOM_MARGIN_PX] = [+76, +1046].
+// 2cm A4 top + bottom margins inside each page. Writable area on
+// page N is [N*1146 + 76, N*1146 + 1046].
 const TOP_MARGIN_PX = 76;
 const BOTTOM_MARGIN_PX = 76;
+// Don't dispatch if the margin change is smaller than this — kills
+// sub-pixel ping-pong from font rendering and rect-rounding.
+const MARGIN_HYSTERESIS_PX = 3;
 
 const KEY = new PluginKey<DecorationSet>("page-breaks");
 
@@ -80,9 +80,11 @@ export const PageBreaksExtension = Extension.create({
         },
         view(editorView) {
           let raf = 0;
-          // Signature of the last-applied set so we don't loop the
-          // editor by re-dispatching identical decorations.
-          let lastSig = "";
+          // Per-offset map of currently-applied margins. Lets us
+          // apply hysteresis (skip dispatching if no margin moved
+          // by more than a few pixels) without re-reading every
+          // node's inline style every frame.
+          const lastMargins = new Map<number, number>();
 
           const measure = () => {
             cancelAnimationFrame(raf);
@@ -97,11 +99,7 @@ export const PageBreaksExtension = Extension.create({
               const paperRect = paperEl.getBoundingClientRect();
 
               const decorations: Decoration[] = [];
-              const sigParts: string[] = [];
-              // Sum of margins we've added to nodes already visited
-              // in this pass. Used to recover each node's natural
-              // (un-pushed) top from its measured top.
-              let cumulativePush = 0;
+              const newMargins = new Map<number, number>();
 
               editorView.state.doc.forEach((node, offset) => {
                 const domNode = editorView.nodeDOM(offset);
@@ -109,58 +107,71 @@ export const PageBreaksExtension = Extension.create({
 
                 const rect = domNode.getBoundingClientRect();
                 const measuredTop = rect.top - paperRect.top;
-                // Margin we previously set on THIS node (from a
-                // prior measurement round). The decoration writes
-                // it as inline style, so reading it back is reliable.
+                // Margin we previously applied to THIS node — read
+                // back from the inline style the decoration writes.
                 const myMargin =
                   parseFloat(domNode.style.marginTop || "0") || 0;
 
-                // Recover the position this node would have without
-                // any of our pushes.
-                const naturalTop = measuredTop - cumulativePush - myMargin;
-                const naturalBottom = naturalTop + rect.height;
+                // Position this node would have if our decoration
+                // on it didn't exist (but preceding decorations
+                // still did — those are baked into measuredTop).
+                const preMyTop = measuredTop - myMargin;
+                const preMyBottom = preMyTop + rect.height;
 
                 // Skip the very first node when it sits near the
                 // top of the paper — pushing it would shove the
                 // entire document down for no reason.
-                if (naturalTop < 4) return;
+                if (preMyTop < 4) return;
 
-                // The page this node *starts* on, and the bottom
-                // edge of that page's writable area (= the line
-                // below which content would land in the bottom
-                // margin or the grey gap — both of which Word
-                // refuses to render text into).
-                const pageTop = Math.floor(naturalTop / PAGE_CYCLE_PX);
+                // Page (in rendered/paper coords) this node sits on
+                // before its own decoration is applied.
+                const renderPage = Math.floor(preMyTop / PAGE_CYCLE_PX);
+                // Bottom edge of that page's writable area — past
+                // this y-coord we're in the bottom margin or grey
+                // gap, both of which are off-limits to text.
                 const writableBottom =
-                  pageTop * PAGE_CYCLE_PX +
+                  renderPage * PAGE_CYCLE_PX +
                   PAGE_HEIGHT_PX -
                   BOTTOM_MARGIN_PX;
 
-                if (naturalBottom > writableBottom + 0.5) {
-                  // Push to the writable-area start of the next page.
-                  const targetRendered =
-                    (pageTop + 1) * PAGE_CYCLE_PX + TOP_MARGIN_PX;
-                  // measuredTop = naturalTop + cumulativePush + myMargin
-                  // We want measuredTop_after = targetRendered
-                  //   ⇒  newMargin = targetRendered - naturalTop - cumulativePush
-                  const newMargin = Math.round(
-                    Math.max(0, targetRendered - naturalTop - cumulativePush)
-                  );
-                  if (newMargin < 4) return;
-                  decorations.push(
-                    Decoration.node(offset, offset + node.nodeSize, {
-                      style: `margin-top: ${newMargin}px`,
-                      class: "page-break-pushed",
-                    })
-                  );
-                  sigParts.push(`${offset}:${newMargin}`);
-                  cumulativePush += newMargin;
-                }
+                if (preMyBottom <= writableBottom + 0.5) return;
+
+                // Push the node so its rendered top lands at the
+                // start of the next page's writable area.
+                const targetRendered =
+                  (renderPage + 1) * PAGE_CYCLE_PX + TOP_MARGIN_PX;
+                const newMargin = Math.round(
+                  Math.max(0, targetRendered - preMyTop)
+                );
+                if (newMargin < 4) return;
+
+                decorations.push(
+                  Decoration.node(offset, offset + node.nodeSize, {
+                    style: `margin-top: ${newMargin}px`,
+                    class: "page-break-pushed",
+                  })
+                );
+                newMargins.set(offset, newMargin);
               });
 
-              const sig = sigParts.join(",");
-              if (sig === lastSig) return;
-              lastSig = sig;
+              // Hysteresis: if every margin is unchanged (or moved
+              // by < MARGIN_HYSTERESIS_PX), skip the dispatch. This
+              // prevents 1px-jiggling from font-rendering or rect
+              // rounding from re-rendering the editor every frame.
+              let anyChanged = newMargins.size !== lastMargins.size;
+              if (!anyChanged) {
+                for (const [k, v] of newMargins) {
+                  const prev = lastMargins.get(k);
+                  if (prev === undefined || Math.abs(prev - v) >= MARGIN_HYSTERESIS_PX) {
+                    anyChanged = true;
+                    break;
+                  }
+                }
+              }
+              if (!anyChanged) return;
+
+              lastMargins.clear();
+              for (const [k, v] of newMargins) lastMargins.set(k, v);
               editorView.dispatch(
                 editorView.state.tr.setMeta(
                   KEY,
@@ -174,7 +185,12 @@ export const PageBreaksExtension = Extension.create({
           window.addEventListener("resize", measure);
 
           return {
-            update: measure,
+            update(_view, prevState) {
+              // Only re-measure on actual document changes — pure
+              // selection / cursor moves don't change heights so a
+              // remeasure would just burn cycles.
+              if (_view.state.doc !== prevState.doc) measure();
+            },
             destroy() {
               cancelAnimationFrame(raf);
               window.removeEventListener("resize", measure);
