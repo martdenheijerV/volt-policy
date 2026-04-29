@@ -12,6 +12,7 @@ import {
 import { addComment, resolveComment } from "@/app/(app)/documents/actions";
 import { formatDate } from "@/lib/utils";
 import type { Comment, CommentKind } from "@/lib/types";
+import { anchorDisplayWord, isAnchorOrphaned } from "@/lib/anchor";
 
 export interface CommentsPanelHandle {
   /**
@@ -380,9 +381,10 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       the show-all panel labelled "Original content deleted".
     */
     const isOrphaned = (c: Comment): boolean => {
-      if (!c.anchor_quote) return false;
-      if (!documentText) return false;
-      return !documentText.includes(c.anchor_quote);
+      // Encoded anchors carry both a unique context (used here) and
+      // the user's display word (used for the UI). isAnchorOrphaned
+      // resolves the right thing for either form.
+      return isAnchorOrphaned(c.anchor_quote, documentText);
     };
     const orphanedLabel = labels.originalDeleted ?? "Original content deleted";
 
@@ -429,9 +431,22 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 {labels.anchoredTo}
               </div>
               <div className="mt-1 italic text-slate-700">
-                &ldquo;
-                {anchor.length > 140 ? anchor.slice(0, 140) + "…" : anchor}
-                &rdquo;
+                {(() => {
+                  // `anchor` carries the storage form (which may be a
+                  // SOH-encoded composite for duplicate-disambiguation).
+                  // The user only ever wants to see the word they
+                  // actually selected.
+                  const display = anchorDisplayWord(anchor);
+                  return (
+                    <>
+                      &ldquo;
+                      {display.length > 140
+                        ? display.slice(0, 140) + "…"
+                        : display}
+                      &rdquo;
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <button
@@ -864,11 +879,22 @@ function CommentThread({
         top.anchor_quote && (
           <div className="mb-2 flex items-center gap-1 border-l-2 border-volt-400 pl-2 text-xs italic text-slate-600">
             <span className="text-volt-700">↪</span>
-            &ldquo;
-            {top.anchor_quote.length > 140
-              ? top.anchor_quote.slice(0, 140) + "…"
-              : top.anchor_quote}
-            &rdquo;
+            {(() => {
+              // anchor_quote may be SOH-encoded (carrying a unique
+              // context window + the original word's offset within
+              // it) — never expose that machinery in the comment
+              // header. Just show the word the commenter selected.
+              const display = anchorDisplayWord(top.anchor_quote);
+              return (
+                <>
+                  &ldquo;
+                  {display.length > 140
+                    ? display.slice(0, 140) + "…"
+                    : display}
+                  &rdquo;
+                </>
+              );
+            })()}
           </div>
         )
       )}

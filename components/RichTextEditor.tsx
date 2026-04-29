@@ -29,19 +29,30 @@ import {
   type AnchorSpec,
 } from "./AnchorHighlights";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { encodeAnchor } from "@/lib/anchor";
 
 /**
- * Extend a selected substring with surrounding document context until
- * it occurs exactly once in the doc, so a comment placed on the second
- * "Maastricht" doesn't end up highlighted next to the first one. The
- * extended string is stored as the comment's anchor_quote.
+ * Build a stable comment anchor from the user's current selection.
  *
- * The trade-off: highlights cover slightly more text than the user
- * literally selected, and the anchor becomes a bit more fragile to
- * edits (rephrasing the surrounding sentence orphans the comment).
- * That's worth it because the alternative — wrong-occurrence
- * highlighting — silently mis-attributes feedback, which is a much
- * worse failure mode.
+ * Bug history this guards against: the original implementation stored
+ * `anchor_quote` as the literal selected text and the matcher in
+ * `AnchorHighlights` did `flat.indexOf(quote)`. So commenting on the
+ * second "Maastricht" silently jumped to the first occurrence —
+ * a wrong-attribution failure mode that's much worse than orphaning.
+ *
+ * Strategy: if the selection is unique in the doc, store it plain.
+ * Otherwise, grow a prefix + suffix window around the selection
+ * until the resulting *context* is unique, then store an encoded
+ * composite (see lib/anchor.ts) that records both the unique context
+ * and where inside it the user's original word sits. The matcher
+ * resolves the context first, then highlights only the word the
+ * user actually picked — not the whole context.
+ *
+ * Defensive: textBetween's offset math doesn't always agree with the
+ * descendants() walk that AnchorHighlights uses. We probe the
+ * computed offset in `flat`; if the selection isn't where we think
+ * it is, we fall back to plain-mode storage rather than risk an
+ * encoded anchor that points at the wrong spot inside the context.
  */
 function makeUniqueAnchor(
   selectedText: string,
@@ -49,40 +60,67 @@ function makeUniqueAnchor(
   doc: PMNode
 ): string {
   if (!selectedText) return selectedText;
-  // Build the same flat text representation AnchorHighlights uses for
-  // matching — block separator " " keeps offsets aligned.
+
+  // Same flat-text view AnchorHighlights uses for matching — block
+  // separator " " keeps offsets aligned.
   const flat = doc.textBetween(0, doc.content.size, " ");
   const charOffset = doc.textBetween(0, fromPos, " ").length;
 
-  // Already unique? No work to do.
+  // Verify charOffset really points at the start of selectedText in
+  // flat. If not (rare — happens when a node treats block-boundary
+  // separators differently), bail to plain storage.
+  const probe = flat.substr(charOffset, selectedText.length);
+  if (probe !== selectedText) return selectedText;
+
+  // Already unique? No need to encode.
   const firstIdx = flat.indexOf(selectedText);
   if (firstIdx === -1) return selectedText;
   const secondIdx = flat.indexOf(selectedText, firstIdx + 1);
   if (secondIdx === -1) return selectedText;
 
-  // Otherwise grow prefix + suffix in lockstep until the candidate is
-  // unique. Capped at 200 total chars so a freshly-pasted long
-  // duplicated paragraph doesn't blow up the stored anchor.
+  // Grow prefix + suffix until the *full window* (prefix + word +
+  // suffix) is unique in the doc. Cap at 240 chars so a pasted-twice
+  // paragraph doesn't blow up the stored anchor.
   const STEP = 8;
-  const MAX = 200;
+  const MAX_WINDOW = 240;
   let prefixLen = 0;
   let suffixLen = 0;
-  let candidate = selectedText;
+  const maxPrefix = charOffset;
+  const maxSuffix = flat.length - charOffset - selectedText.length;
 
-  while (prefixLen + suffixLen < MAX) {
-    prefixLen = Math.min(charOffset, prefixLen + STEP);
-    suffixLen = Math.min(
-      flat.length - charOffset - selectedText.length,
-      suffixLen + STEP
-    );
+  // Always make at least one extension pass — even an 8-char prefix
+  // dramatically reduces collision rate, and the matcher uses the
+  // context anyway.
+  while (prefixLen + selectedText.length + suffixLen < MAX_WINDOW) {
+    const nextPrefix = Math.min(maxPrefix, prefixLen + STEP);
+    const nextSuffix = Math.min(maxSuffix, suffixLen + STEP);
+    if (nextPrefix === prefixLen && nextSuffix === suffixLen) {
+      // No room left to grow on either side — give up, encode
+      // whatever we've got. Highlight will still pin to whatever
+      // single occurrence still matches in the live doc.
+      break;
+    }
+    prefixLen = nextPrefix;
+    suffixLen = nextSuffix;
+
     const start = charOffset - prefixLen;
     const end = charOffset + selectedText.length + suffixLen;
-    candidate = flat.slice(start, end);
-    const a = flat.indexOf(candidate);
-    if (a === flat.lastIndexOf(candidate)) return candidate;
-    if (start === 0 && end >= flat.length) return candidate;
+    const context = flat.slice(start, end);
+    if (flat.indexOf(context) === flat.lastIndexOf(context)) {
+      return encodeAnchor(selectedText, prefixLen, context);
+    }
   }
-  return candidate;
+
+  // Could not make the window unique within MAX_WINDOW. Encode anyway
+  // — the matcher will pick whichever context occurrence still
+  // exists; if there are still multiple, it picks the first, but
+  // that's no worse than the plain-anchor failure mode and we keep
+  // the displayWord readable in the UI.
+  const start = charOffset - prefixLen;
+  const end = charOffset + selectedText.length + suffixLen;
+  const context = flat.slice(start, end);
+  if (context === selectedText) return selectedText;
+  return encodeAnchor(selectedText, prefixLen, context);
 }
 
 export interface RichTextEditorHandle {
@@ -725,6 +763,14 @@ function Toolbar({
         className="rounded border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-volt-500"
       >
         <option value="">Size</option>
+        {/*
+          Sizes mirror Microsoft Word's built-in dropdown (8 → 72 pt)
+          so anyone moving back and forth between Word and this
+          editor sees the same step ladder. Stored as `px` because
+          that's what CSS understands; visually the values are
+          calibrated 1:1 with Word's pt scale at the editor's
+          standard zoom.
+        */}
         {[
           "8px",
           "9px",
@@ -732,12 +778,16 @@ function Toolbar({
           "11px",
           "12px",
           "14px",
+          "16px",
           "18px",
+          "20px",
+          "22px",
           "24px",
-          "30px",
+          "26px",
+          "28px",
           "36px",
           "48px",
-          "60px",
+          "72px",
         ].map((s) => (
           <option key={s} value={s}>
             {s.replace("px", "")}

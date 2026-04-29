@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { parseAnchor } from "@/lib/anchor";
 
 export interface AnchorSpec {
   id: string;
@@ -44,16 +45,42 @@ function buildDecorations(
     }
   });
 
-  // Per-anchor cap so a generic quote like "Hee" or "the" can't paint
-  // half the document yellow (Mart's bug report — selecting a
-  // repeated word turned the whole page into a highlight). Anchors
-  // that match more than this cap likely point at a generic word,
-  // not the specific spot the user meant; we silently truncate rather
-  // than show 50 highlights.
-  const MAX_HITS_PER_ANCHOR = 3;
+  // Plain-anchor cap so a generic quote like "Hee" or "the" can't
+  // paint half the document yellow (Mart's earlier bug report —
+  // selecting a repeated word turned the whole page into a
+  // highlight). Encoded anchors don't need this — they always
+  // resolve to exactly one decoration.
+  const MAX_HITS_PER_PLAIN_ANCHOR = 3;
 
   for (const a of anchors) {
     if (!a.quote) continue;
+    const parsed = parseAnchor(a.quote);
+
+    if (parsed.encoded) {
+      // Encoded composite: locate the unique context window first,
+      // then highlight only the user-selected word inside it. This
+      // is the path that fixes commenting-on-the-second-occurrence
+      // — `parsed.contextNeedle` is unique by construction (when
+      // makeUniqueAnchor managed it), so flat.indexOf returns the
+      // right spot.
+      const ctxIdx = flat.indexOf(parsed.contextNeedle);
+      if (ctxIdx === -1) continue; // orphaned — original text deleted
+      const wordIdx = ctxIdx + parsed.wordOffsetInContext;
+      const wordEndIdx = wordIdx + parsed.wordLength - 1;
+      if (wordIdx >= map.length || wordEndIdx >= map.length) continue;
+      const start = map[wordIdx];
+      const end = map[wordEndIdx] + 1;
+      decos.push(
+        Decoration.inline(start, end, {
+          class: "anchor-highlight",
+          "data-comment-id": a.id,
+        })
+      );
+      hits.push({ id: a.id, from: start, to: end });
+      continue;
+    }
+
+    // Plain (legacy) anchor: paint every match up to the cap.
     const needle = a.quote;
     let i = 0;
     let matchesForThisAnchor = 0;
@@ -74,7 +101,7 @@ function buildDecorations(
       hits.push({ id: a.id, from: start, to: end });
       i = idx + needle.length;
       matchesForThisAnchor += 1;
-      if (matchesForThisAnchor >= MAX_HITS_PER_ANCHOR) break;
+      if (matchesForThisAnchor >= MAX_HITS_PER_PLAIN_ANCHOR) break;
     }
   }
 
