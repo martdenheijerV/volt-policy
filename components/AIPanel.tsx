@@ -35,22 +35,51 @@ export default function AIPanel({
   return (
     <details className="rounded-lg border bg-white p-4 shadow-sm print:hidden">
       <summary className="cursor-pointer text-sm font-semibold">
-        🤖 {labels.heading}
+        {labels.heading}
       </summary>
-      <div className="mt-4 space-y-6 text-sm">
-        <SimilarDocsSection
-          contentHtml={contentHtml}
+      <div className="mt-4">
+        <AIPanelBody
           documentId={documentId}
-          labels={labels}
-        />
-        <GrammarSection
           contentHtml={contentHtml}
           language={language}
           labels={labels}
         />
-        <CefrSection contentHtml={contentHtml} labels={labels} />
       </div>
     </details>
+  );
+}
+
+/**
+ * The three section bodies, rendered inline (no `<details>` shell).
+ * Used by `ToolbarAIMenu` so the popover shows the controls directly
+ * — the previous wiring kept the outer `<details>` collapsed inside
+ * the popover, which made the AI button look empty when clicked.
+ */
+export function AIPanelBody({
+  documentId,
+  contentHtml,
+  language,
+  labels,
+}: {
+  documentId: string;
+  contentHtml: string;
+  language: string;
+  labels: AIPanelLabels;
+}) {
+  return (
+    <div className="space-y-6 text-sm">
+      <SimilarDocsSection
+        contentHtml={contentHtml}
+        documentId={documentId}
+        labels={labels}
+      />
+      <GrammarSection
+        contentHtml={contentHtml}
+        language={language}
+        labels={labels}
+      />
+      <CefrSection contentHtml={contentHtml} labels={labels} />
+    </div>
   );
 }
 
