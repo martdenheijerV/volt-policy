@@ -8,6 +8,7 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
+import PageBreaksExtension from "./PageBreaksExtension";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 import {
@@ -180,6 +181,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(
           placeholder: "Start writing your policy…",
         }) as AnyExtension,
         AnchorHighlights.configure({ anchors }) as AnyExtension,
+        // Pushes top-level blocks past the visual A4 page break drawn
+        // by the .editor-paper gradient — see PageBreaksExtension.ts.
+        PageBreaksExtension as AnyExtension,
       ];
       if (realtime && ydocRef.current && providerRef.current) {
         base.push(

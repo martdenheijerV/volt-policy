@@ -244,6 +244,19 @@ body {
 .prose-doc pre { background: #f5f0fb; padding: 1rem; border-radius: 6px; overflow-x: auto; }
 
 /*
+ * Page-break pushed nodes — the PageBreaksExtension adds this class
+ * to top-level blocks that would otherwise straddle the grey gap
+ * between A4 pages. The inline `style="margin-top: <N>px"` on the
+ * decoration does the actual lifting; this class is just a hook for
+ * dev-tools inspection and any future visual treatment (e.g. a
+ * dotted line above the lifted block in debug mode).
+ */
+.ProseMirror .page-break-pushed {
+  /* No layout rule here — margin-top is set inline by the extension
+     to the exact pixel offset needed for that specific block. */
+}
+
+/*
  * Realtime collab cursors. Tiptap's CollaborationCursor extension renders
  * a caret + a name label per remote user. The default styling is heavy —
  * a 2px-wide bar in solid color is jarring inside flowing prose. Slim the
