@@ -49,11 +49,13 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 // Pattern length of the page-gradient: white page (29.7cm) + grey
 // gap (24px). Page N starts at N * PAGE_CYCLE_PX in paper coords.
 const PAGE_CYCLE_PX = 1146;
-// 2cm A4 top margin inside each page. The "writable area" of page N
-// runs [N * PAGE_CYCLE_PX + TOP_MARGIN_PX, (N+1) * PAGE_CYCLE_PX - 24
-// - TOP_MARGIN_PX]. We push straddlers so their top lands at the
-// start of the next page's writable area.
+// White page itself (without the 24px grey gap).
+const PAGE_HEIGHT_PX = 1122;
+// 2cm A4 top + bottom margins inside each page. The writable area
+// of page N runs [N * PAGE_CYCLE_PX + TOP_MARGIN_PX,
+// N * PAGE_CYCLE_PX + PAGE_HEIGHT_PX - BOTTOM_MARGIN_PX] = [+76, +1046].
 const TOP_MARGIN_PX = 76;
+const BOTTOM_MARGIN_PX = 76;
 
 const KEY = new PluginKey<DecorationSet>("page-breaks");
 
@@ -123,19 +125,21 @@ export const PageBreaksExtension = Extension.create({
                 // entire document down for no reason.
                 if (naturalTop < 4) return;
 
-                // Page indices for the natural positions.
+                // The page this node *starts* on, and the bottom
+                // edge of that page's writable area (= the line
+                // below which content would land in the bottom
+                // margin or the grey gap — both of which Word
+                // refuses to render text into).
                 const pageTop = Math.floor(naturalTop / PAGE_CYCLE_PX);
-                // -0.5 so a node ending exactly on a boundary is
-                // counted as ending on the previous page.
-                const pageBottom = Math.floor(
-                  (naturalBottom - 0.5) / PAGE_CYCLE_PX
-                );
+                const writableBottom =
+                  pageTop * PAGE_CYCLE_PX +
+                  PAGE_HEIGHT_PX -
+                  BOTTOM_MARGIN_PX;
 
-                if (pageBottom > pageTop) {
-                  // Land the rendered top at the writable-area start
-                  // of the page the bottom ended on.
+                if (naturalBottom > writableBottom + 0.5) {
+                  // Push to the writable-area start of the next page.
                   const targetRendered =
-                    pageBottom * PAGE_CYCLE_PX + TOP_MARGIN_PX;
+                    (pageTop + 1) * PAGE_CYCLE_PX + TOP_MARGIN_PX;
                   // measuredTop = naturalTop + cumulativePush + myMargin
                   // We want measuredTop_after = targetRendered
                   //   ⇒  newMargin = targetRendered - naturalTop - cumulativePush
