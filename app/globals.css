@@ -148,28 +148,45 @@ body {
   }
 }
 .editor-paper {
-  background: white;
   width: 100%;
   max-width: 820px;
   margin: 0 auto;
   padding: 0 0 2cm;
-  box-shadow:
-    0 1px 3px rgba(60, 64, 67, 0.15),
-    0 4px 8px rgba(60, 64, 67, 0.15);
   border-radius: 2px;
   min-height: 29.7cm;
   position: relative;
-  /* Page-break visualisation: faint horizontal line every 29.7cm so
-     the user has a visual cue of where pages would break in print.
-     Tiny because ProseMirror doesn't actually paginate — this is just
-     a hint, not an accurate guide. */
+  /*
+   * Multi-page A4 visualisation. Each "page" is 29.7cm of white paper
+   * separated by a 24px grey gap (canvas color, #e8eaed) so it looks
+   * like Google Docs' stacked pages. ProseMirror content flows
+   * continuously through the gap — proper pagination would require a
+   * custom plugin; this is a visual cue.
+   *
+   * Stack of background-images (top → bottom in CSS order):
+   *   1. Subtle dark line just below each gap (top edge of next page).
+   *   2. Subtle dark line just above each gap (bottom edge of prev page).
+   *   3. The white-page / grey-gap repeating pattern itself.
+   */
   background-image: repeating-linear-gradient(
     to bottom,
-    transparent 0,
-    transparent calc(29.7cm - 1px),
-    rgba(0, 0, 0, 0.06) calc(29.7cm - 1px),
-    rgba(0, 0, 0, 0.06) 29.7cm
+    white 0,
+    white 29.7cm,
+    /* small drop-shadow line at the bottom of each page */
+    rgba(0, 0, 0, 0.06) 29.7cm,
+    rgba(0, 0, 0, 0.06) calc(29.7cm + 1px),
+    /* grey gap (canvas color) between pages */
+    #e8eaed calc(29.7cm + 1px),
+    #e8eaed calc(29.7cm + 23px),
+    /* small drop-shadow line at the top of next page */
+    rgba(0, 0, 0, 0.06) calc(29.7cm + 23px),
+    rgba(0, 0, 0, 0.06) calc(29.7cm + 24px)
   );
+  /* Outer shadow around the whole stack — Google Docs renders a
+     shadow per page, but that needs splitting content into separate
+     DOM nodes (not feasible with a single ProseMirror instance). */
+  box-shadow:
+    0 1px 3px rgba(60, 64, 67, 0.15),
+    0 4px 8px rgba(60, 64, 67, 0.15);
 }
 /* Editor body: holds Tiptap (sticky toolbar internal), title slot,
    and the prose. The toolbar inside Tiptap handles its own sticky

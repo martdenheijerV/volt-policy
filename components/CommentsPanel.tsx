@@ -275,6 +275,11 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     function startReply(id: string) {
       setReplyTo(id);
       setAnchor("");
+      setComposeTop(null);
+      // Reset body so the user doesn't accidentally post leftover text
+      // from a half-typed anchored comment as the reply.
+      setBody("");
+      setError(null);
       requestAnimationFrame(() => bodyRef.current?.focus());
     }
 
@@ -303,6 +308,104 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
     */
     const composeOpen = !!anchor || !!replyTo;
 
+    /*
+      The compose-form JSX. Reused for both:
+       - new anchored comments (rendered at the top of the column,
+         optionally pinned to the selection's vertical offset);
+       - replies (rendered INSIDE the parent thread card so the user
+         doesn't get yanked back to the top of the panel).
+      All state (body, error, pending) lives in the parent so the
+      same DOM is mutated regardless of where it's rendered.
+    */
+    const composeFormJsx = currentUserId && composeOpen ? (
+      <div className="space-y-2 rounded-lg border bg-white p-3 shadow-md">
+        {replyTo ? (
+          <div className="flex items-start gap-2 rounded border-l-4 border-slate-400 bg-slate-50 p-2 text-xs">
+            <div className="flex-1 italic text-slate-600">
+              {labels.replyingToComment}
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setReplyTo(null);
+                setComposeTop(null);
+              }}
+              aria-label={labels.cancelReply}
+              className="hover:underline"
+            >
+              ✕
+            </button>
+          </div>
+        ) : anchor ? (
+          <div className="flex items-start gap-2 rounded border-l-4 border-volt-500 bg-volt-50 p-2 text-xs">
+            <div className="flex-1">
+              <div className="font-medium uppercase tracking-wider text-volt-700">
+                {labels.anchoredTo}
+              </div>
+              <div className="mt-1 italic text-slate-700">
+                &ldquo;
+                {anchor.length > 140 ? anchor.slice(0, 140) + "…" : anchor}
+                &rdquo;
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAnchor("");
+                setComposeTop(null);
+              }}
+              aria-label={labels.removeAnchor}
+              className="text-volt-700 hover:underline"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">{labels.selectTextHint}</p>
+        )}
+
+        <textarea
+          ref={bodyRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          rows={3}
+          placeholder={
+            replyTo
+              ? labels.placeholderReply
+              : anchor
+              ? labels.placeholderAnchored
+              : labels.placeholderGeneral
+          }
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+          aria-label={labels.bodyAria}
+        />
+
+        {error && (
+          <div role="alert" className="rounded bg-red-50 p-2 text-xs text-red-800">
+            {error}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            submit();
+          }}
+          disabled={pending || !body.trim()}
+          className="rounded bg-volt-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
+        >
+          {pending
+            ? labels.posting
+            : replyTo
+            ? labels.postReply
+            : labels.postComment}
+        </button>
+      </div>
+    ) : null;
+
     // Show-all label fallbacks so older translations don't break the
     // build. New strings live in lib/i18n/dictionaries.ts but the
     // component needs to render gracefully if they're missing.
@@ -318,7 +421,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
       return (
         <aside
           ref={wrapperRef}
-          className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col rounded-lg border border-slate-200 bg-white shadow-md print:hidden"
+          className="sticky top-0 flex max-h-[calc(100vh-1rem)] flex-col rounded-lg border border-slate-200 bg-white shadow-md print:hidden"
           aria-label={allCommentsTitle}
         >
           <header className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
@@ -413,6 +516,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                     onReply={startReply}
                     labels={labels}
                     anchorOffset={null}
+                    replyForm={replyTo === c.id ? composeFormJsx : null}
                   />
                 ))}
               </ul>
@@ -474,7 +578,13 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
           </p>
         )}
 
-        {currentUserId && composeOpen ? (
+        {/*
+          Top compose form: ONLY for new (anchored) comments. Replies
+          render inside their parent thread card via the replyForm prop
+          on CommentThread — so clicking "Reply" doesn't yank the user
+          back to the top of the panel (Mart's bug report).
+        */}
+        {anchor && !replyTo && composeFormJsx && (
           <div
             style={
               composeTop !== null
@@ -487,97 +597,11 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                   }
                 : undefined
             }
-            className="mb-4 space-y-2 rounded-lg border bg-white p-3 shadow-md"
+            className="mb-4"
           >
-            {replyTo ? (
-              <div className="flex items-start gap-2 rounded border-l-4 border-slate-400 bg-slate-50 p-2 text-xs">
-                <div className="flex-1 italic text-slate-600">
-                  {labels.replyingToComment}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReplyTo(null);
-                    setComposeTop(null);
-                  }}
-                  aria-label={labels.cancelReply}
-                  className="hover:underline"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : anchor ? (
-              <div className="flex items-start gap-2 rounded border-l-4 border-volt-500 bg-volt-50 p-2 text-xs">
-                <div className="flex-1">
-                  <div className="font-medium uppercase tracking-wider text-volt-700">
-                    {labels.anchoredTo}
-                  </div>
-                  <div className="mt-1 italic text-slate-700">
-                    &ldquo;
-                    {anchor.length > 140 ? anchor.slice(0, 140) + "…" : anchor}
-                    &rdquo;
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAnchor("");
-                    setComposeTop(null);
-                  }}
-                  aria-label={labels.removeAnchor}
-                  className="text-volt-700 hover:underline"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500">{labels.selectTextHint}</p>
-            )}
-
-            {/*
-              Type selector (general / review / suggestion) intentionally
-              hidden — comments are now just plain comments. The kind is
-              still tracked in the DB (existing rows + new ones default
-              to 'general') so we can resurface it later as a quick
-              labeling action on individual comments. Mart's request:
-              "Dat mogen gewoon de reacties zijn".
-            */}
-
-            <textarea
-              ref={bodyRef}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={3}
-              placeholder={
-                replyTo
-                  ? labels.placeholderReply
-                  : anchor
-                  ? labels.placeholderAnchored
-                  : labels.placeholderGeneral
-              }
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-              aria-label={labels.bodyAria}
-            />
-
-            {error && (
-              <div role="alert" className="rounded bg-red-50 p-2 text-xs text-red-800">
-                {error}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={submit}
-              disabled={pending || !body.trim()}
-              className="rounded bg-volt-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
-            >
-              {pending
-                ? labels.posting
-                : replyTo
-                ? labels.postReply
-                : labels.postComment}
-            </button>
+            {composeFormJsx}
           </div>
-        ) : null}
+        )}
 
         <div className="mt-1">
           {/* "Open (n)" header removed — anchored cards float at the
@@ -609,6 +633,7 @@ const CommentsPanel = forwardRef<CommentsPanelHandle, Props>(
                 onReply={startReply}
                 labels={labels}
                 anchorOffset={tops[c.id] ?? null}
+                replyForm={replyTo === c.id ? composeFormJsx : null}
               />
             ))}
           </ul>
@@ -628,6 +653,7 @@ function CommentThread({
   onReply,
   labels,
   anchorOffset,
+  replyForm,
 }: {
   top: Comment;
   replies: Comment[];
@@ -641,6 +667,13 @@ function CommentThread({
       editor. When non-null we float the card to that height; when
       null we let it sit in normal flow. */
   anchorOffset: number | null;
+  /**
+   * Inline reply form. When non-null this thread is currently being
+   * replied to and the parent passes the compose form down so it
+   * renders inside the card instead of jumping the user to the top
+   * of the panel.
+   */
+  replyForm?: React.ReactNode;
 }) {
   const hasAnchor = !!top.anchor_quote;
   const handleJump = () => {
@@ -753,6 +786,22 @@ function CommentThread({
           </button>
         )}
       </div>
+
+      {/*
+        Inline reply form. Rendered here when this thread is the
+        active reply target. Stops the click bubbling so clicking
+        inside the form (especially the textarea) doesn't trigger
+        the card's onClick → handleJump and yank focus around.
+      */}
+      {replyForm && (
+        <div
+          className="mt-3"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {replyForm}
+        </div>
+      )}
     </li>
   );
 }
