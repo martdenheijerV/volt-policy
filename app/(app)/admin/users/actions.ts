@@ -71,11 +71,24 @@ export async function createExternalUser(input: {
     return { ok: false, error: "Only admins can create external users." };
   }
 
-  // 1. Create the Authentik user
-  const auth = await createAuthentikUser({
-    name: input.name,
-    email: input.email,
-  });
+  // 1. Create the Authentik user. createAuthentikUser throws when its
+  // env vars (OIDC_ISSUER_URL, AUTHENTIK_API_TOKEN) are missing —
+  // catch that here so the form gets a readable message instead of
+  // the opaque Next.js "Application error" client-side.
+  let auth: Awaited<ReturnType<typeof createAuthentikUser>>;
+  try {
+    auth = await createAuthentikUser({
+      name: input.name,
+      email: input.email,
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        "Authentik call failed: " +
+        (e instanceof Error ? e.message : String(e)),
+    };
+  }
   if (!auth.ok) {
     return { ok: false, error: auth.error ?? "Authentik failed." };
   }
@@ -128,8 +141,18 @@ export async function createExternalUser(input: {
 
   // Take them straight into the OIDC redirect — bypasses the "Continue with
   // Volt Auth" button on /login (which is misleading for external users
-  // who don't actually have Volt SSO).
-  const loginUrl = `${new URL(process.env.OIDC_REDIRECT_URI ?? "http://localhost").origin}/api/auth/login`;
+  // who don't actually have Volt SSO). Falls back to the public app URL
+  // if OIDC_REDIRECT_URI isn't configured, then to localhost.
+  let loginUrl: string;
+  try {
+    const base =
+      process.env.OIDC_REDIRECT_URI ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      "http://localhost";
+    loginUrl = `${new URL(base).origin}/api/auth/login`;
+  } catch {
+    loginUrl = "/api/auth/login";
+  }
 
   revalidatePath("/admin/users");
   return {
