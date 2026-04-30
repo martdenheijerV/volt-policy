@@ -246,16 +246,16 @@ export default async function DocumentPage({
   const overflowItems: OverflowItem[] = [
     { kind: "link", label: t("doc.history"), href: `/documents/${doc.id}/history`, icon: "📜" },
     { kind: "link", label: t("doc.amendments"), href: `/documents/${doc.id}/amendments`, icon: "✎" },
-    ...(doc.citations_enabled
-      ? [
-          {
-            kind: "link" as const,
-            label: t("doc.citations"),
-            href: `/documents/${doc.id}/citations`,
-            icon: "📚",
-          },
-        ]
-      : []),
+    // Citations / Bronnen is now always-on. The `citations_enabled`
+    // column on documents stays around for backward compatibility but
+    // is no longer consulted for menu visibility — every doc gets the
+    // Bronnen tab automatically.
+    {
+      kind: "link" as const,
+      label: t("doc.citations"),
+      href: `/documents/${doc.id}/citations`,
+      icon: "📚",
+    },
     ...(discussion?.url
       ? [
           {

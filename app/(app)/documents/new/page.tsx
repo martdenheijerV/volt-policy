@@ -97,9 +97,6 @@ export default async function NewDocumentPage() {
     purposePh,
     tagsPh,
     contentPh,
-    optionalFeaturesLabel,
-    citationsLabel,
-    citationsHint,
     scopeLabel,
     scopeHint,
     scopeNoneEligible,
@@ -109,11 +106,6 @@ export default async function NewDocumentPage() {
     tr("Why does this document exist?"),
     tr("climate, eu, trade (comma-separated)"),
     tr("# Heading\n\nYour policy text…"),
-    tr("Optional features"),
-    tr("Enable citations / bibliography"),
-    tr(
-      "Adds a Citations tab to this document. After saving, open the document and find Citations in the ⋯ menu to add sources — then reference them in the body with [@cite_key]. Most docs don't need this; leave off for plain hyperlink references."
-    ),
     tr("Where does this document belong?"),
     tr(
       "Pick one. Members of the chosen scope will be able to read this draft; the scope's lead and any members with edit rights will be able to change it."
@@ -337,31 +329,13 @@ export default async function NewDocumentPage() {
         </div>
 
         {/*
-          Optional features sit after the content field so the form
-          flows in order of importance: title → type/lang → purpose →
-          tags → custom metadata → content → optional add-ons. By the
-          time the editor reaches this fieldset they've made the
-          content decisions; toggling 'Enable citations' here just
-          decorates an already-written doc.
+          The "Optional features" fieldset (with the citations opt-in
+          checkbox) used to live here. Citations / Bronnen is now
+          always-on for every doc — no toggle needed. The
+          `citations_enabled` column on documents stays in the schema
+          but is set to true by the createDocument server action by
+          default and ignored elsewhere.
         */}
-        <fieldset className="space-y-2 rounded border border-slate-200 p-4">
-          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {optionalFeaturesLabel}
-          </legend>
-          <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              name="citations_enabled"
-              className="mt-1 h-4 w-4 rounded border-slate-300"
-            />
-            <span>
-              <span className="font-medium">{citationsLabel}</span>
-              <span className="mt-1 block text-xs text-slate-500">
-                {citationsHint}
-              </span>
-            </span>
-          </label>
-        </fieldset>
 
         <div className="flex gap-3">
           <button

@@ -62,9 +62,10 @@ export async function createDocument(formData: FormData) {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
-  // Optional features the editor toggled on at creation time. The
-  // checkbox sends "on" when checked, nothing when unchecked.
-  const citations_enabled = formData.get("citations_enabled") === "on";
+  // Citations / Bronnen is always-on now — the form-level checkbox
+  // was removed. We keep writing the column for any downstream code
+  // that might still read it; the value is just always true.
+  const citations_enabled = true;
 
   // Scope picker: form sends three loose fields:
   //   scope_kind            ("group" | "department") from the radio
