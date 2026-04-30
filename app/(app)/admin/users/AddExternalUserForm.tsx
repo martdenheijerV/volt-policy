@@ -21,11 +21,9 @@ export interface AddExternalUserFormLabels {
   email: string;
   emailPlaceholder: string;
   role: string;
-  roleMember: string;
   roleEditor: string;
   rolePolicyLead: string;
   rolePolicyLeadDepartment: string;
-  roleTranslator: string;
   roleAdmin: string;
   creating: string;
   create: string;
@@ -45,6 +43,10 @@ export default function AddExternalUserForm({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  // Default to `editor` — that's the new "starter" role for any user
+  // who lands in a group. Members and translators were retired in
+  // migration 014, so the dropdown below offers only the four
+  // current roles.
   const [role, setRole] = useState<UserRole>("editor");
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<
@@ -187,13 +189,11 @@ export default function AddExternalUserForm({
             disabled={pending}
             className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
           >
-            <option value="member">{labels.roleMember}</option>
             <option value="editor">{labels.roleEditor}</option>
             <option value="policy_lead">{labels.rolePolicyLead}</option>
             <option value="policy_lead_department">
               {labels.rolePolicyLeadDepartment}
             </option>
-            <option value="translator">{labels.roleTranslator}</option>
             <option value="admin">{labels.roleAdmin}</option>
           </select>
         </label>

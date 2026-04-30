@@ -53,8 +53,9 @@ export async function GET(request: Request) {
   //   B. We haven't seen oidc_sub, but an admin pre-created a row keyed on
   //      email (the "Add external user" flow). Match by lowercased email
   //      and link the oidc_sub onto that row, preserving the pre-set role.
-  //   C. Fully new user → insert with default role 'member' (or 'admin' if
-  //      the IdP put them in the volt-policy-admin group).
+  //   C. Fully new user → insert with default role 'editor' (or 'admin' if
+  //      the IdP put them in the volt-policy-admin group). The `member`
+  //      role was retired in migration 014; editor is the new starter.
   const sql = getSql();
   void sql;
   const realName = claims.name ?? claims.preferred_username ?? claims.email ?? null;
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
         ${claims.sub},
         ${fullName},
         ${emailLower},
-        ${isAdminGroup ? "admin" : "member"}
+        ${isAdminGroup ? "admin" : "editor"}
       )
       returning id, full_name, role
     `;

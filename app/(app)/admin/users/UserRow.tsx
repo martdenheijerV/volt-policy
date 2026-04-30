@@ -70,11 +70,29 @@ export default function UserRow({
             disabled={pending}
             className="rounded border border-slate-300 px-2 py-1 text-sm"
           >
+            {/*
+              Four roles only — `member` and `translator` were retired
+              in migration 014. Existing rows with those roles get
+              auto-migrated to `editor` on apply, but an admin browsing
+              the list before redeploy might still see them in the
+              defaultValue; render them as disabled options so the
+              dropdown shows the current value without inviting new
+              assignments.
+            */}
             <option value="admin">admin</option>
             <option value="editor">editor</option>
             <option value="policy_lead">policy_lead</option>
-            <option value="member">member</option>
-            <option value="translator">translator</option>
+            <option value="policy_lead_department">policy_lead_department</option>
+            {profile.role === "member" && (
+              <option value="member" disabled>
+                member (legacy)
+              </option>
+            )}
+            {profile.role === "translator" && (
+              <option value="translator" disabled>
+                translator (legacy)
+              </option>
+            )}
           </select>
         </td>
         <td className="px-4 py-3 uppercase">{profile.language_pref}</td>

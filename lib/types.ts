@@ -1,10 +1,32 @@
+/**
+ * Active roles post-migration 014:
+ *
+ *   - admin
+ *   - editor                  (default for any user added to a group)
+ *   - policy_lead             (scoped to one or more working groups)
+ *   - policy_lead_department  (scoped to one or more departments)
+ *
+ * `member` and `translator` are retained in the type only because
+ * older audit-log rows and SCIM payloads may still reference them.
+ * Migration 014 backfills every active profile to one of the four
+ * current roles; new role assignments must come from `ActiveUserRole`.
+ */
 export type UserRole =
   | "admin"
   | "editor"
   | "policy_lead"
   | "policy_lead_department"
+  /** @deprecated retired in migration 014 — auto-migrated to editor */
   | "member"
+  /** @deprecated retired in migration 014 — auto-migrated to editor */
   | "translator";
+
+/** The roles a fresh assignment can use (no legacy values). */
+export type ActiveUserRole =
+  | "admin"
+  | "editor"
+  | "policy_lead"
+  | "policy_lead_department";
 
 /**
  * A `department` is an organisational unit (Volt Europa, Volt EP,

@@ -87,10 +87,11 @@ export default async function AdminUsersPage() {
       <p className="text-sm text-slate-600">
         <T>
           Change user roles, invite external users, and manage the
-          department layer (organisational units). Admins can manage all
-          documents; editors create and edit; members read review/approved
-          docs and comment; translators work on translations; policy leads
-          and policy_lead_department leads have scoped rights.
+          department layer (organisational units). Four roles in total:
+          admin (full rights everywhere), editor (the default starter
+          role — anyone added to a group is an editor until promoted),
+          policy_lead (scoped to one or more working groups), and
+          policy_lead_department (scoped to one or more departments).
         </T>
       </p>
 
@@ -188,11 +189,9 @@ async function buildAddExternalUserLabels(
     email,
     emailPlaceholder,
     role,
-    roleMember,
     roleEditor,
     rolePolicyLead,
     rolePolicyLeadDepartment,
-    roleTranslator,
     roleAdmin,
     creating,
     create,
@@ -218,12 +217,12 @@ async function buildAddExternalUserLabels(
     tr("Email address"),
     tr("name@example.org"),
     tr("Role"),
-    tr("Member (read + comment only)"),
-    tr("Editor (create + edit)"),
-    tr("Policy lead (edit + approve scoped to a group)"),
+    // Four-role lineup post-migration 014. `member` and `translator`
+    // were retired; both auto-migrate to editor.
+    tr("Editor (create + edit; default for new group members)"),
+    tr("Policy lead (edit + approve scoped to a working group)"),
     tr("Policy lead — department (full rights inside their department)"),
-    tr("Translator (translation work)"),
-    tr("Admin (oversight + approve)"),
+    tr("Admin (oversight + approve everywhere)"),
     tr("Creating…"),
     tr("Create"),
     tr("Cancel"),
@@ -245,11 +244,9 @@ async function buildAddExternalUserLabels(
     email,
     emailPlaceholder,
     role,
-    roleMember,
     roleEditor,
     rolePolicyLead,
     rolePolicyLeadDepartment,
-    roleTranslator,
     roleAdmin,
     creating,
     create,

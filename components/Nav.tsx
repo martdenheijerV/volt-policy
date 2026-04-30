@@ -5,7 +5,10 @@ import type { Profile } from "@/lib/types";
 
 export default async function Nav({ profile }: { profile: Profile | null }) {
   const { t, lang } = await getT();
-  const roleBadge = profile?.role ?? "member";
+  // `member` was retired in migration 014 — fall back to `editor` so
+  // a profile that somehow loads with a NULL role gets the new
+  // starter label rather than a legacy one.
+  const roleBadge = profile?.role ?? "editor";
   return (
     <header className="border-b bg-white print:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">

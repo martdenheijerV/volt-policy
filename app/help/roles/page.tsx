@@ -17,51 +17,49 @@ export default function HelpRoles() {
       </p>
 
       <h2>
-        <T>Built-in roles</T>
+        <T>The four roles</T>
       </h2>
+      <p>
+        <T>
+          As of migration 014 Volt Policy uses four roles. The old
+          `member` and `translator` roles were retired and existing
+          accounts auto-migrated to editor; translation work is now
+          done by editors with access to the relevant document.
+        </T>
+      </p>
       <ul>
         <li>
           <T>
-            admin — full read/write across every document; manages users,
-            groups, document-type access, departments, metadata fields,
-            and approves documents. Sees the audit log.
+            admin — full read/write across every document; manages
+            users, groups, document-type access, departments and
+            metadata fields. Sees the audit log.
           </T>
         </li>
         <li>
           <T>
-            editor — creates, edits and archives any document; sees the
-            review queue.
+            editor — the default starter role. Anyone added to a group
+            is an editor by default and gets the group&apos;s configured
+            access (read / edit, per document type). Editors create,
+            edit and archive documents within their reach.
           </T>
         </li>
         <li>
           <T>
             policy_lead — assigned by an admin to one or more working
-            groups (Climate WG, Brussels office, etc.). Inside those
-            groups, can approve documents matching the group&apos;s
-            permission rules. Outside, falls back to editor rights.
+            groups (Climate WG, Brussels office, ...). Inside those
+            groups, full management rights including approving
+            documents and adding/removing members. Outside, falls
+            back to editor rights.
           </T>
         </li>
         <li>
           <T>
             policy_lead_department — assigned by an admin to one or
-            more departments (organisational units like Volt EP, Volt
+            more departments (organisational units: Volt EP, Volt
             Nederland, Volt Maastricht, ...). Inside their department,
-            full management rights on every document tagged with that
-            department. Outside, falls back to editor rights. Cannot
-            create or delete groups, departments or assign global roles
-            — that stays admin-only.
-          </T>
-        </li>
-        <li>
-          <T>
-            member — reads documents in review and approved, comments,
-            proposes amendments, supports amendments.
-          </T>
-        </li>
-        <li>
-          <T>
-            translator — reads everything, edits only the translation
-            columns, can mark translations as verified.
+            full management rights — same as policy_lead, but the
+            scope is the department instead of a topical working
+            group. Outside, falls back to editor rights.
           </T>
         </li>
       </ul>

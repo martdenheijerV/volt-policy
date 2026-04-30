@@ -88,7 +88,10 @@ export async function POST(request: Request) {
   const oidcSub = body.externalId ?? null;
   const fullName = body.displayName ?? email;
   const langPref = body["urn:volt:scim:custom"]?.languagePref ?? "en";
-  const role = body["urn:volt:scim:custom"]?.role ?? "member";
+  // `member` was retired in migration 014; new SCIM-provisioned
+  // users land as `editor` unless the IdP attribute explicitly
+  // overrides the role.
+  const role = body["urn:volt:scim:custom"]?.role ?? "editor";
 
   const sql = getSql();
   const created = await sql.begin(async (tx) => {
