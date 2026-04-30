@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/db/client";
 
 /**
@@ -14,40 +13,64 @@ import { createClient } from "@/lib/db/client";
  * All actions admin-only — enforced both by the RLS policies on the
  * tables and by an explicit check at the top of each action body, so
  * a misconfigured RLS policy can't silently expose write access.
+ *
+ * Result-shape contract: every action returns `{ ok: true } | { ok:
+ * false, error: string }` instead of throwing. Throwing inside a
+ * server action that triggers `revalidatePath` produced the generic
+ * "An error occurred in the Server Components render" digest in
+ * production for Mart — Next.js wraps any uncaught server-side
+ * throw with that message and there's no way to see the real error
+ * client-side. Returning a result lets the caller `router.refresh()`
+ * on success and surface the actual error message inline on failure.
  */
 
-async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (me?.role !== "admin") throw new Error("Admin only");
-  return supabase;
+type ActionResult = { ok: true } | { ok: false; error: string };
+
+async function requireAdmin(): Promise<
+  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>> }
+  | { ok: false; error: string }
+> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Not authenticated" };
+    const { data: me, error: meErr } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (meErr) return { ok: false, error: meErr.message };
+    if (me?.role !== "admin") return { ok: false, error: "Admin only" };
+    return { ok: true, supabase };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Auth check failed",
+    };
+  }
 }
 
-export async function createDepartment(formData: FormData) {
-  const supabase = await requireAdmin();
+export async function createDepartment(formData: FormData): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
   const name = (formData.get("name") as string)?.trim();
   const description = ((formData.get("description") as string) || "").trim();
-  if (!name) throw new Error("Department name is required");
-  const { error } = await supabase
+  if (!name) return { ok: false, error: "Department name is required" };
+  const { error } = await auth.supabase
     .from("departments")
     .insert({ name, description: description || null });
-  if (error) throw error;
-  revalidatePath("/admin/users");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
-export async function deleteDepartment(id: string) {
-  const supabase = await requireAdmin();
-  const { error } = await supabase.from("departments").delete().eq("id", id);
-  if (error) throw error;
-  revalidatePath("/admin/users");
+export async function deleteDepartment(id: string): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+  const { error } = await auth.supabase.from("departments").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /**
@@ -62,23 +85,25 @@ export async function setDepartmentLead(
   departmentId: string,
   userId: string,
   assigned: boolean
-) {
-  const supabase = await requireAdmin();
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
   if (assigned) {
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("department_leads")
       .insert({ department_id: departmentId, user_id: userId });
-    // 23505 = unique violation, treat as idempotent.
-    if (error && error.code !== "23505") throw error;
+    if (error && error.code !== "23505") {
+      return { ok: false, error: error.message };
+    }
   } else {
-    const { error } = await supabase
+    const { error } = await auth.supabase
       .from("department_leads")
       .delete()
       .eq("department_id", departmentId)
       .eq("user_id", userId);
-    if (error) throw error;
+    if (error) return { ok: false, error: error.message };
   }
-  revalidatePath("/admin/users");
+  return { ok: true };
 }
 
 /**
@@ -90,12 +115,13 @@ export async function setDepartmentLead(
 export async function setUserPrimaryDepartment(
   userId: string,
   departmentId: string | null
-) {
-  const supabase = await requireAdmin();
-  const { error } = await supabase
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return auth;
+  const { error } = await auth.supabase
     .from("profiles")
     .update({ primary_department_id: departmentId })
     .eq("id", userId);
-  if (error) throw error;
-  revalidatePath("/admin/users");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   createDepartment,
   deleteDepartment,
@@ -98,6 +99,7 @@ function CreateDepartmentForm({
 }: {
   labels: DepartmentsCardLabels;
 }) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -106,22 +108,22 @@ function CreateDepartmentForm({
   function submit() {
     if (!name.trim()) return;
     setError(null);
-    // Hand a real FormData object to the server action — Next.js
-    // can't serialise an inline arrow-closure as a form action, but
-    // it happily accepts a server action invoked from a button
-    // click inside a transition. This keeps the optimistic UX
-    // (clear input, surface errors inline) without the
-    // <form action={inline}> footgun.
     const fd = new FormData();
     fd.set("name", name.trim());
     fd.set("description", description.trim());
     startTransition(async () => {
-      try {
-        await createDepartment(fd);
+      // Server action returns a result shape — never throws — so we
+      // can't trip the generic "Server Components render" digest.
+      // On success we call router.refresh() to pull the fresh
+      // department list; on failure we surface the actual message
+      // in a small alert below the form.
+      const res = await createDepartment(fd);
+      if (res.ok) {
         setName("");
         setDescription("");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : labels.failed);
+        router.refresh();
+      } else {
+        setError(res.error || labels.failed);
       }
     });
   }
@@ -195,6 +197,7 @@ function DepartmentRow({
   people: Person[];
   labels: DepartmentsCardLabels;
 }) {
+  const router = useRouter();
   const [picker, setPicker] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -207,22 +210,18 @@ function DepartmentRow({
     setError(null);
     setPicker("");
     startTransition(async () => {
-      try {
-        await setDepartmentLead(department.id, userId, true);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : labels.failed);
-      }
+      const res = await setDepartmentLead(department.id, userId, true);
+      if (res.ok) router.refresh();
+      else setError(res.error || labels.failed);
     });
   }
 
   function unassign(userId: string) {
     setError(null);
     startTransition(async () => {
-      try {
-        await setDepartmentLead(department.id, userId, false);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : labels.failed);
-      }
+      const res = await setDepartmentLead(department.id, userId, false);
+      if (res.ok) router.refresh();
+      else setError(res.error || labels.failed);
     });
   }
 
@@ -232,11 +231,9 @@ function DepartmentRow({
     }
     setError(null);
     startTransition(async () => {
-      try {
-        await deleteDepartment(department.id);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : labels.failed);
-      }
+      const res = await deleteDepartment(department.id);
+      if (res.ok) router.refresh();
+      else setError(res.error || labels.failed);
     });
   }
 
