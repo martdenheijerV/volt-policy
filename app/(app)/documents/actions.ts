@@ -7,6 +7,10 @@ import { canApproveDoc } from "@/lib/db/approval";
 import { slugify } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
 import { notifyAdminsOfPendingReview } from "@/lib/email";
+import {
+  findAuthentikUserByEmail,
+  deactivateAuthentikUser,
+} from "@/lib/auth/authentik";
 import type { CommentKind, DocStatus, DocType } from "@/lib/types";
 
 export async function deleteUserGdpr(
@@ -37,10 +41,50 @@ export async function deleteUserGdpr(
       .update({ proposer_name_cached: "Anonymous" })
       .eq("proposer_id", userId);
   }
+
+  // Look up the email *before* deleting the profile so we can find
+  // and deactivate the matching Authentik user — otherwise the user
+  // can simply log in again and the OIDC callback will recreate a
+  // fresh profile.
+  const { data: target } = await db
+    .from("profiles")
+    .select("email")
+    .eq("id", userId)
+    .maybeSingle<{ email: string | null }>();
+
   // Drop the profile row. ON DELETE SET NULL on author_id keeps the comment body.
   const { error } = await db.from("profiles").delete().eq("id", userId);
   if (error) throw error;
-  await logAudit("user.gdpr_delete", "profile", userId, { mode });
+
+  // Best-effort Authentik deactivation. We don't fail the whole
+  // delete if Authentik is unreachable — the local profile is gone
+  // either way, and the admin can flip is_active in Authentik
+  // manually as a fallback. The audit log records what we tried.
+  let authentikResult: "deactivated" | "not_found" | "skipped" | "failed" =
+    "skipped";
+  let authentikError: string | undefined;
+  if (target?.email) {
+    try {
+      const found = await findAuthentikUserByEmail(target.email);
+      if (!found) {
+        authentikResult = "not_found";
+      } else {
+        const res = await deactivateAuthentikUser(found.pk);
+        authentikResult = res.ok ? "deactivated" : "failed";
+        authentikError = res.error;
+      }
+    } catch (e) {
+      authentikResult = "failed";
+      authentikError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  await logAudit("user.gdpr_delete", "profile", userId, {
+    mode,
+    email: target?.email ?? null,
+    authentik: authentikResult,
+    authentik_error: authentikError,
+  });
   revalidatePath("/admin/users");
   return { ok: true };
 }

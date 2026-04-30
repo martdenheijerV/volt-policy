@@ -132,3 +132,50 @@ async function authentikUsernameExists(username: string): Promise<boolean> {
   const data = (await res.json()) as { results?: unknown[] };
   return Array.isArray(data.results) && data.results.length > 0;
 }
+
+/**
+ * Find an Authentik user by their email address. Used by the GDPR
+ * delete flow to look up the matching upstream account so we can
+ * deactivate it. Returns null if no exact-email match is found.
+ */
+export async function findAuthentikUserByEmail(
+  email: string
+): Promise<{ pk: number; username: string } | null> {
+  const res = await authentikFetch(
+    `/core/users/?email=${encodeURIComponent(email.trim().toLowerCase())}`
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    results?: Array<{ pk: number; username: string; email?: string }>;
+  };
+  const hit = (data.results ?? []).find(
+    (u) => (u.email ?? "").toLowerCase() === email.trim().toLowerCase()
+  );
+  return hit ? { pk: hit.pk, username: hit.username } : null;
+}
+
+/**
+ * Deactivate an Authentik user (sets is_active = false). Reversible
+ * — an Authentik admin can flip it back via the Authentik UI. Used
+ * by the GDPR delete flow to stop a deleted profile from being
+ * re-created on next login.
+ *
+ * Returns ok:false on any non-2xx; the caller can decide whether
+ * to surface the error or treat the local-side delete as success
+ * regardless.
+ */
+export async function deactivateAuthentikUser(
+  pk: number
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await authentikFetch(`/core/users/${pk}/`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: false }),
+  });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: `Authentik deactivate failed: ${res.status} ${await res.text()}`,
+    };
+  }
+  return { ok: true };
+}
