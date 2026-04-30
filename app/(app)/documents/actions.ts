@@ -57,6 +57,10 @@ export async function createDocument(formData: FormData) {
   const language = (formData.get("language") as string) || "en";
   const purpose = (formData.get("purpose") as string)?.trim() || null;
   const tagsRaw = (formData.get("tags") as string) || "";
+  // The "Initial content" textarea was removed from the new-document
+  // form (Mart's request: write inside the editor itself, not in a
+  // separate textarea). Falls back to empty string for any old form
+  // that still posts the field.
   const content = (formData.get("content") as string) || "";
   const tags = tagsRaw
     .split(",")

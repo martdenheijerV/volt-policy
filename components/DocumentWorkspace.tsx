@@ -533,25 +533,27 @@ export default function DocumentWorkspace({
           <div className="editor-paper">
             <div className="paper-body-prose">
               {/*
-                Title field — sits at the top of the A4-style paper,
-                above the prose. Borderless on idle so it reads like a
-                Word-doc heading; gets a faint focus ring on edit.
-                Disabled when the doc is locked (review/approved/
-                archived). Autosave picks up the new value on next
-                debounced fire (see `dirty` calculation above).
+                Title field — sits at the top of the A4 paper as a
+                small grey "Titel: …" line, not a big bold heading.
+                Mart wanted it understated so the user's own H1 in
+                the prose stays the visual title. Disabled when the
+                doc is locked (review/approved/archived). Autosave
+                picks up the new value on next debounced fire.
               */}
-              <label htmlFor="doc-title-input" className="sr-only">
-                {labels.titleLabel ?? "Title"}
-              </label>
-              <input
-                id="doc-title-input"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={!canEdit}
-                placeholder={labels.titlePlaceholder ?? "Untitled"}
-                className="mb-4 block w-full border-0 bg-transparent px-0 text-3xl font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
-              />
+              <div className="mb-4 flex items-baseline gap-2 text-sm text-slate-500">
+                <label htmlFor="doc-title-input" className="shrink-0">
+                  {labels.titleLabel ?? "Title"}:
+                </label>
+                <input
+                  id="doc-title-input"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  disabled={!canEdit}
+                  placeholder={labels.titlePlaceholder ?? "Untitled"}
+                  className="block w-full border-0 bg-transparent px-0 text-sm text-slate-500 outline-none placeholder:text-slate-300 focus:text-slate-700 focus:ring-0 disabled:cursor-not-allowed"
+                />
+              </div>
               <RichTextEditor
                 toolbarTrailingSlot={
                   <div className="flex items-center gap-2">

@@ -114,7 +114,6 @@ export default async function NewDocumentPage() {
   const [
     purposePh,
     tagsPh,
-    contentPh,
     scopeLabel,
     scopeHint,
     scopeNoneEligible,
@@ -126,7 +125,6 @@ export default async function NewDocumentPage() {
   ] = await Promise.all([
     tr("Why does this document exist?"),
     tr("climate, eu, trade (comma-separated)"),
-    tr("# Heading\n\nYour policy text…"),
     tr("Where does this document belong?"),
     tr(
       "Pick one. Members of the chosen scope will be able to read this draft; the scope's lead and any members with edit rights will be able to change it."
@@ -365,39 +363,36 @@ export default async function NewDocumentPage() {
         </div>
 
         {universal.length > 0 && (
-          <fieldset className="space-y-3 rounded border border-slate-200 p-4">
-            <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          // Collapsible — default folded so the creation form stays
+          // short. Users who want to enrich the doc with the seeded
+          // baseline metadata (Geographic scope, Stakeholders, …)
+          // expand by clicking. Server-side validation on `required`
+          // fields still runs — if a required custom field is empty
+          // on submit, the action returns "<label> is required" and
+          // the user re-opens the section to fill it.
+          <details className="space-y-3 rounded border border-slate-200 p-4">
+            <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-slate-500">
               <T>Custom metadata</T>
-            </legend>
+            </summary>
             <p className="text-xs text-slate-500">
               <T>Per-type fields will appear after you save and edit the document.</T>
             </p>
             {universal.map((f) => (
               <MetadataField key={f.id} field={f} />
             ))}
-          </fieldset>
+          </details>
         )}
 
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium">
-            <T>Initial content (Markdown or rich text)</T>
-          </label>
-          <textarea
-            id="content"
-            name="content"
-            rows={10}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
-            placeholder={contentPh}
-          />
-        </div>
-
         {/*
-          The "Optional features" fieldset (with the citations opt-in
-          checkbox) used to live here. Citations / Bronnen is now
-          always-on for every doc — no toggle needed. The
-          `citations_enabled` column on documents stays in the schema
-          but is set to true by the createDocument server action by
-          default and ignored elsewhere.
+          The "Initial content" textarea has been removed at Mart's
+          request — every new doc starts with an empty editor and the
+          user types there. The createDocument action no longer reads
+          a `content` form field; it inserts an empty string into
+          documents.current_content.
+
+          The "Optional features" fieldset (citations opt-in checkbox)
+          used to live below this block. Citations / Bronnen is now
+          always-on; no toggle needed.
         */}
 
         <div className="flex gap-3">
