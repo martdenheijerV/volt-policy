@@ -21,7 +21,7 @@ values
    'Geographic scope',
    'select',
    '["EU", "National", "Regional", "Local"]'::jsonb,
-   true,
+   false,
    null,
    10),
   ('stakeholders',
