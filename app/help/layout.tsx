@@ -5,9 +5,10 @@ import { T } from "@/components/T";
 
 const SECTIONS = [
   { slug: "", label: "Overview" },
-  { slug: "create-document", label: "Create a document" },
+  { slug: "create-document", label: "Writing & editing" },
   { slug: "review-and-approve", label: "Review & approve" },
-  { slug: "comments", label: "Anchored comments" },
+  { slug: "comments", label: "Comments" },
+  { slug: "ai-assistant", label: "AI assistant" },
   { slug: "amendments", label: "Amendments" },
   { slug: "translations", label: "Translations" },
   { slug: "export", label: "Export & print" },
