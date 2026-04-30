@@ -28,22 +28,31 @@ export default async function Nav({ profile }: { profile: Profile | null }) {
           </Link>
           {profile?.role === "admin" && (
             <>
-              <Link href="/admin/users" className="hover:underline">
+              {/*
+                Single "Beheer" entry: the /admin layout renders the
+                Personen / Document types / Groepen tab strip, so the
+                three-link nav pattern from before is now collapsed
+                into one. Metadata fields still live at /admin/metadata
+                — kept as a separate link for the (rare) people who
+                manage per-organisation custom fields.
+              */}
+              <Link href="/admin" className="hover:underline">
                 {t("nav.admin")}
-              </Link>
-              <Link href="/admin/groups" className="hover:underline">
-                {t("nav.groups")}
               </Link>
               <Link href="/admin/metadata" className="hover:underline">
                 {t("nav.metadata")}
               </Link>
             </>
           )}
-          {/* Policy leads get a Groups link too — but only to the
-              groups they're a member of (the page filters by membership
-              when the viewer isn't an admin). They can't add/remove
-              members or change permission rules; that stays admin-only. */}
-          {profile?.role === "policy_lead" && (
+          {/*
+            Policy leads (group-scoped or department-scoped) get the
+            Groepen tab as their entry point — they see only the
+            groups they belong to or lead. The /admin layout enforces
+            this filter; the page itself enforces read-only mode for
+            non-admin viewers.
+          */}
+          {(profile?.role === "policy_lead" ||
+            profile?.role === "policy_lead_department") && (
             <Link href="/admin/groups" className="hover:underline">
               {t("nav.groups")}
             </Link>

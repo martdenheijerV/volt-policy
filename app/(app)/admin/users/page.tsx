@@ -4,6 +4,9 @@ import UserRow, { type UserRowLabels } from "./UserRow";
 import AddExternalUserForm, {
   type AddExternalUserFormLabels,
 } from "./AddExternalUserForm";
+import DepartmentsCard, {
+  type DepartmentsCardLabels,
+} from "./DepartmentsCard";
 import { T } from "@/components/T";
 import { getTr } from "@/lib/i18n/server";
 import type { Profile } from "@/lib/types";
@@ -30,6 +33,30 @@ export default async function AdminUsersPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
+  // Departments + lead assignments for the Departments card. Two
+  // round-trips kept separate so a slow leads query doesn't block
+  // the users table — both happen in parallel below.
+  const [{ data: departments }, { data: leads }] = await Promise.all([
+    supabase
+      .from("departments")
+      .select("id,name,description")
+      .order("name"),
+    supabase.from("department_leads").select("department_id,user_id"),
+  ]);
+
+  const leadsByDept = new Map<string, string[]>();
+  for (const l of leads ?? []) {
+    const arr = leadsByDept.get(l.department_id) ?? [];
+    arr.push(l.user_id);
+    leadsByDept.set(l.department_id, arr);
+  }
+  const deptsWithLeads = (departments ?? []).map((d) => ({
+    id: d.id,
+    name: d.name,
+    description: d.description,
+    leadIds: leadsByDept.get(d.id) ?? [],
+  }));
+
   const [
     nameCol,
     roleCol,
@@ -38,6 +65,7 @@ export default async function AdminUsersPage() {
     actionsCol,
     rowLabels,
     formLabels,
+    deptLabels,
   ] = await Promise.all([
     tr("Name"),
     tr("Role"),
@@ -46,18 +74,23 @@ export default async function AdminUsersPage() {
     tr("Actions"),
     buildUserRowLabels(tr),
     buildAddExternalUserLabels(tr),
+    buildDepartmentsLabels(tr),
   ]);
 
   return (
     <div>
-      <h1 className="text-3xl font-bold">
-        <T>User management</T>
-      </h1>
-      <p className="mt-1 text-sm text-slate-600">
+      {/*
+        No local <h1> here — the /admin layout provides the "Beheer"
+        page heading and the tab strip above this content. Each tab's
+        page is just its body.
+      */}
+      <p className="text-sm text-slate-600">
         <T>
-          Change user roles. Admins can manage all documents; editors can
-          create and edit; members can comment on review/approved documents;
-          translators work on translations.
+          Change user roles, invite external users, and manage the
+          department layer (organisational units). Admins can manage all
+          documents; editors create and edit; members read review/approved
+          docs and comment; translators work on translations; policy leads
+          and policy_lead_department leads have scoped rights.
         </T>
       </p>
 
@@ -83,6 +116,12 @@ export default async function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+
+      <DepartmentsCard
+        departments={deptsWithLeads}
+        people={(profiles as Profile[] | null) ?? []}
+        labels={deptLabels}
+      />
     </div>
   );
 }
@@ -152,6 +191,7 @@ async function buildAddExternalUserLabels(
     roleMember,
     roleEditor,
     rolePolicyLead,
+    rolePolicyLeadDepartment,
     roleTranslator,
     roleAdmin,
     creating,
@@ -181,6 +221,7 @@ async function buildAddExternalUserLabels(
     tr("Member (read + comment only)"),
     tr("Editor (create + edit)"),
     tr("Policy lead (edit + approve scoped to a group)"),
+    tr("Policy lead — department (full rights inside their department)"),
     tr("Translator (translation work)"),
     tr("Admin (oversight + approve)"),
     tr("Creating…"),
@@ -207,10 +248,73 @@ async function buildAddExternalUserLabels(
     roleMember,
     roleEditor,
     rolePolicyLead,
+    rolePolicyLeadDepartment,
     roleTranslator,
     roleAdmin,
     creating,
     create,
     cancel,
+  };
+}
+
+async function buildDepartmentsLabels(
+  tr: (s: string) => Promise<string>
+): Promise<DepartmentsCardLabels> {
+  const [
+    heading,
+    intro,
+    newDeptName,
+    description,
+    namePlaceholder,
+    add,
+    noDepts,
+    leadsHeading,
+    noLeads,
+    pickLead,
+    assign,
+    remove,
+    warningWrongRole,
+    deleteLabel,
+    confirmDeleteTpl,
+    failed,
+  ] = await Promise.all([
+    tr("Departments"),
+    tr(
+      "Organisational units (Volt Europa, Volt EP, Volt Nederland, etc.). Each department can have one or more policy leads — admins assign them here. Leads need the role policy_lead_department to actually exercise their rights; an amber warning appears next to anyone whose role doesn't match yet."
+    ),
+    tr("New department name"),
+    tr("Description"),
+    tr("e.g. Volt Berlin"),
+    tr("Add"),
+    tr("No departments yet."),
+    tr("Department leads"),
+    tr("No leads assigned yet."),
+    tr("Pick a person…"),
+    tr("Assign"),
+    tr("Remove"),
+    tr(
+      "This user is assigned as lead but doesn't have the role policy_lead_department yet. Assignment grants no rights until the role is set on the Personen tab above."
+    ),
+    tr("Delete"),
+    tr("Delete department {name}? Lead assignments will be removed too."),
+    tr("Failed"),
+  ]);
+  return {
+    heading,
+    intro,
+    newDeptName,
+    description,
+    namePlaceholder,
+    add,
+    noDepts,
+    leadsHeading,
+    noLeads,
+    pickLead,
+    assign,
+    remove,
+    warningWrongRole,
+    delete: deleteLabel,
+    confirmDeleteTpl,
+    failed,
   };
 }

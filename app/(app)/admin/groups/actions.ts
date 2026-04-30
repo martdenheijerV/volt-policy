@@ -92,3 +92,33 @@ export async function deleteGroupPermission(id: string, groupId: string) {
   await supabase.from("group_doc_permissions").delete().eq("id", id);
   revalidatePath(`/admin/groups/${groupId}`);
 }
+
+/**
+ * Mark or un-mark a group member as the group's policy lead. Stored
+ * in `user_group_leads`. The user's profiles.role should be
+ * `policy_lead` (or `policy_lead_department`) for the assignment to
+ * grant approve rights elsewhere — we don't enforce that here so
+ * admins can pre-populate before flipping the role.
+ */
+export async function setGroupLead(
+  groupId: string,
+  userId: string,
+  assigned: boolean
+) {
+  const supabase = await requireAdmin();
+  if (assigned) {
+    const { error } = await supabase
+      .from("user_group_leads")
+      .insert({ group_id: groupId, user_id: userId });
+    if (error && error.code !== "23505") throw error;
+  } else {
+    const { error } = await supabase
+      .from("user_group_leads")
+      .delete()
+      .eq("group_id", groupId)
+      .eq("user_id", userId);
+    if (error) throw error;
+  }
+  revalidatePath(`/admin/groups/${groupId}`);
+  return { ok: true };
+}

@@ -10,6 +10,7 @@ import {
   deleteGroup,
 } from "../actions";
 import GroupActions, { type GroupActionsLabels } from "./GroupActions";
+import MemberLeadToggle from "./MemberLeadToggle";
 import { T } from "@/components/T";
 import { getT, getTr } from "@/lib/i18n/server";
 import { DOC_TYPES, DOC_TYPE_LABELS } from "@/lib/doc-types";
@@ -66,6 +67,15 @@ export default async function GroupDetailPage({
     .eq("group_id", id)
     .order("created_at");
 
+  // Per-group policy lead assignments. Cheap query — typically one
+  // group has 0–3 leads. Used to render the "Lead" badge + toggle
+  // in the members table below.
+  const { data: leads } = await supabase
+    .from("user_group_leads")
+    .select("user_id")
+    .eq("group_id", id);
+  const leadIds = new Set((leads ?? []).map((l) => l.user_id));
+
   const { data: allProfiles } = await supabase
     .from("profiles")
     .select("id,full_name,role")
@@ -89,6 +99,10 @@ export default async function GroupDetailPage({
     addMemberLabel,
     addLabel,
     addingLabel,
+    leadLabel,
+    makeLeadLabel,
+    unmakeLeadLabel,
+    failedLabel,
   ] = await Promise.all([
     tr("Any"),
     tr("Any"),
@@ -107,6 +121,10 @@ export default async function GroupDetailPage({
     tr("Add member…"),
     tr("Add"),
     tr("Adding…"),
+    tr("Lead"),
+    tr("Make lead"),
+    tr("Remove lead"),
+    tr("Failed"),
   ]);
 
   // Pre-translate every doc-type label once (cached after first fetch).
@@ -151,6 +169,19 @@ export default async function GroupDetailPage({
                   {m.full_name ?? <em className="text-slate-400">{unknown}</em>}
                 </td>
                 <td className="px-4 py-2 text-slate-500 capitalize">{m.role}</td>
+                <td className="px-4 py-2">
+                  <MemberLeadToggle
+                    groupId={group.id}
+                    userId={m.user_id}
+                    initialLead={leadIds.has(m.user_id)}
+                    labels={{
+                      lead: leadLabel,
+                      makeLead: makeLeadLabel,
+                      unmakeLead: unmakeLeadLabel,
+                      failed: failedLabel,
+                    }}
+                  />
+                </td>
                 <td className="px-4 py-2 text-right">
                   <form action={async () => { "use server"; await removeMember(group.id, m.user_id); }}>
                     <button className="text-xs text-red-700 hover:underline">{remove}</button>

@@ -2,8 +2,24 @@ export type UserRole =
   | "admin"
   | "editor"
   | "policy_lead"
+  | "policy_lead_department"
   | "member"
   | "translator";
+
+/**
+ * A `department` is an organisational unit (Volt Europa, Volt EP,
+ * Volt Nederland, etc.). Distinct from `user_groups`, which model
+ * topic-based working groups (Climate WG, Brussels office, etc.).
+ * Departments are managed by admins from /admin (Personen tab);
+ * policy_lead_department users get full management rights inside
+ * their assigned department(s) and editor rights everywhere else.
+ */
+export interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
 export type DocStatus = "draft" | "review" | "approved" | "archived";
 export type DocType =
   | "policy"

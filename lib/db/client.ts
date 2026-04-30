@@ -82,6 +82,22 @@ class QueryBuilder<T = Row> implements PromiseLike<SelectResult<T>> {
     this.filters.push({ sql: `${ident(col)} <= ?`, values: [val] });
     return this;
   }
+  /**
+   * `.is(col, null)` / `.is(col, true)` / `.is(col, false)` — for
+   * IS NULL / IS TRUE / IS FALSE comparisons, which `=` can't
+   * express. Mirrors PostgREST's filter API.
+   */
+  is(col: string, val: null | boolean) {
+    if (val === null) {
+      this.filters.push({ sql: `${ident(col)} is null`, values: [] });
+    } else {
+      this.filters.push({
+        sql: `${ident(col)} is ${val ? "true" : "false"}`,
+        values: [],
+      });
+    }
+    return this;
+  }
   in(col: string, vals: unknown[]) {
     if (vals.length === 0) {
       this.filters.push({ sql: `false`, values: [] });

@@ -73,13 +73,17 @@ export default async function GroupsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold">
-        <T>User groups</T>
-      </h1>
-      <p className="mt-1 text-sm text-slate-600">
+      {/*
+        No local <h1> — the /admin layout already provides "Beheer".
+        This is the content of the Groepen tab.
+      */}
+      <p className="text-sm text-slate-600">
         <T>
-          Group members get default read/edit/comment permissions across
-          documents of certain types or statuses.
+          Working groups (Climate working group, Brussels office, …) and
+          their members. Members get default read / edit / comment access
+          to certain document types via the rules configured on the
+          Document types tab. Policy leads can be assigned per group on
+          its detail page.
         </T>
       </p>
 

@@ -23,14 +23,33 @@ export default function HelpRoles() {
         <li>
           <T>
             admin — full read/write across every document; manages users,
-            groups, metadata fields, and approves documents. Sees the audit
-            log.
+            groups, document-type access, departments, metadata fields,
+            and approves documents. Sees the audit log.
           </T>
         </li>
         <li>
           <T>
             editor — creates, edits and archives any document; sees the
             review queue.
+          </T>
+        </li>
+        <li>
+          <T>
+            policy_lead — assigned by an admin to one or more working
+            groups (Climate WG, Brussels office, etc.). Inside those
+            groups, can approve documents matching the group&apos;s
+            permission rules. Outside, falls back to editor rights.
+          </T>
+        </li>
+        <li>
+          <T>
+            policy_lead_department — assigned by an admin to one or
+            more departments (organisational units like Volt EP, Volt
+            Nederland, Volt Maastricht, ...). Inside their department,
+            full management rights on every document tagged with that
+            department. Outside, falls back to editor rights. Cannot
+            create or delete groups, departments or assign global roles
+            — that stays admin-only.
           </T>
         </li>
         <li>
@@ -60,15 +79,41 @@ export default function HelpRoles() {
       </p>
 
       <h2>
-        <T>Group permissions</T>
+        <T>Departments &amp; groups</T>
       </h2>
       <p>
         <T>
-          Admins create user groups (e.g. Climate working group, Brussels
-          office, Translators-NL) under Settings → Groups, and assign
-          default read / edit rules per document type and status. A user
-          belongs to as many groups as needed; effective permissions are
-          the union.
+          Volt Policy uses two orthogonal layers:
+        </T>
+      </p>
+      <ul>
+        <li>
+          <T>
+            Departments — organisational units (Volt Europa, Volt EP,
+            Volt Nederland, Volt Duitsland, Volt Maastricht, ...).
+            Managed under Beheer → Personen. Each department can have
+            one or more policy_lead_department leads, assigned by an
+            admin. Documents are optionally tagged with a department,
+            which is what gives the lead their scoped rights.
+          </T>
+        </li>
+        <li>
+          <T>
+            Groups — topic-based working groups (Climate WG, Brussels
+            office, Translators-NL, ...). Managed under Beheer →
+            Groepen. Each group has members and (optionally) per-group
+            policy_lead leads. Default read / edit access per document
+            type for a group is configured on the Document types tab,
+            which presents a matrix of (group × type) toggles.
+          </T>
+        </li>
+      </ul>
+      <p>
+        <T>
+          A user can belong to one department and to as many groups as
+          needed. Effective permissions are the union of (built-in
+          role) + (department-scoped lead rights, if any) + (group
+          membership rules) + (per-document overrides).
         </T>
       </p>
 
