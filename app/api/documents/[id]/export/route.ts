@@ -19,8 +19,8 @@ export async function GET(
   const url = new URL(request.url);
   const fmt = (url.searchParams.get("format") ?? "md").toLowerCase();
 
-  const supabase = await createClient();
-  const { data: doc, error } = await supabase
+  const db = await createClient();
+  const { data: doc, error } = await db
     .from("documents")
     .select("title,current_content,document_type,language,slug,approved_at,current_version")
     .eq("id", id)

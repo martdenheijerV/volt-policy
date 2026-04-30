@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * Browser-readable session probe. Returns the currently logged-in user (id,
  * email, name) or `{ user: null }` when there is no session. Used by client
- * components that previously did `supabase.auth.getUser()` from the browser.
+ * components that previously did `db.auth.getUser()` from the browser.
  */
 export async function GET() {
   const session = await getSession();

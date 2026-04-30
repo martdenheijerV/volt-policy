@@ -10,15 +10,15 @@ import type { Document } from "@/lib/types";
 
 export default async function DashboardPage() {
   const { t, lang } = await getT();
-  const supabase = await createClient();
+  const db = await createClient();
 
   // Logged-in user + profile (so we can show their language preference
   // and group memberships in this dashboard, the user's "home base").
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   const { data: profile } = user
-    ? await supabase
+    ? await db
         .from("profiles")
         .select("id,full_name,role,language_pref")
         .eq("id", user.id)
@@ -30,44 +30,56 @@ export default async function DashboardPage() {
         }>()
     : { data: null };
 
-  // Group memberships: which groups is the user IN, and what permission
-  // rules attach to those groups? Raw SQL because the shim doesn't handle
-  // the multi-table join cleanly. RLS-safe because we run with user
-  // context — if the user can't read user_group_members rows, they get
-  // back nothing rather than someone else's data.
+  // The user's scope memberships: working groups they're in + every
+  // department they have rights in. Each row carries the user's
+  // effective can_read / can_edit for that scope so the dashboard can
+  // show a "Read" / "Edit" chip without a second round-trip.
+  //
+  // After 015_scoped_permissions, this replaces the old per-group
+  // "rule chips" widget — there are no per-doc-type rules anymore;
+  // a member just has one pair of flags per scope.
   const userId = user?.id ?? null;
-  const myGroups = userId
+  const myScopes = userId
     ? await withUser(userId, async (sql) => {
         return await sql<{
-          group_id: string;
+          kind: "group" | "department";
+          scope_id: string;
           name: string;
           description: string | null;
-          rules_json: string | null;
+          can_read: boolean;
+          can_edit: boolean;
+          is_lead: boolean;
         }[]>`
-          select g.id   as group_id,
+          select 'group'::text as kind,
+                 g.id   as scope_id,
                  g.name as name,
                  g.description as description,
-                 (
-                   select coalesce(
-                     json_agg(
-                       json_build_object(
-                         'document_type', p.document_type,
-                         'status', p.status,
-                         'can_read', p.can_read,
-                         'can_edit', p.can_edit,
-                         'can_comment', p.can_comment,
-                         'can_approve', p.can_approve
-                       )
-                     ),
-                     '[]'::json
-                   )::text
-                   from public.group_doc_permissions p
-                   where p.group_id = g.id
-                 ) as rules_json
+                 coalesce(ugmp.can_read, false) or coalesce(ugmp.can_edit, false) as can_read,
+                 coalesce(ugmp.can_edit, false) as can_edit,
+                 exists (
+                   select 1 from public.user_group_leads ugl
+                    where ugl.group_id = g.id and ugl.user_id = ${userId}
+                 ) as is_lead
             from public.user_group_members m
             join public.user_groups g on g.id = m.group_id
+            left join public.user_group_member_permissions ugmp
+                   on ugmp.group_id = g.id and ugmp.user_id = m.user_id
            where m.user_id = ${userId}
-           order by g.name
+           union all
+          select 'department'::text as kind,
+                 d.id   as scope_id,
+                 d.name as name,
+                 d.description as description,
+                 (dmp.can_read or dmp.can_edit) as can_read,
+                 dmp.can_edit as can_edit,
+                 exists (
+                   select 1 from public.department_leads dl
+                    where dl.department_id = d.id and dl.user_id = ${userId}
+                 ) as is_lead
+            from public.department_member_permissions dmp
+            join public.departments d on d.id = dmp.department_id
+           where dmp.user_id = ${userId}
+           order by name
         `;
       })
     : [];
@@ -195,13 +207,13 @@ export default async function DashboardPage() {
     }
   }
 
-  const { data: recent } = await supabase
+  const { data: recent } = await db
     .from("documents")
     .select("*")
     .order("updated_at", { ascending: false })
     .limit(6);
 
-  const { data: counts } = await supabase
+  const { data: counts } = await db
     .from("documents")
     .select("status");
   const countByStatus = (counts ?? []).reduce<Record<string, number>>(
@@ -230,11 +242,11 @@ export default async function DashboardPage() {
     `;
   });
 
-  const { data: weekComments } = await supabase
+  const { data: weekComments } = await db
     .from("comments")
     .select("id,created_at,author_id")
     .gte("created_at", since);
-  const { data: weekDocs } = await supabase
+  const { data: weekDocs } = await db
     .from("documents")
     .select("id,created_at")
     .gte("created_at", since);
@@ -417,55 +429,66 @@ export default async function DashboardPage() {
           <p className="mt-1 text-sm text-slate-600">
             {t("dashboard.myGroupsSubtitle")}
           </p>
-          {myGroups.length === 0 ? (
+          {myScopes.length === 0 ? (
             <div className="mt-4 rounded border border-dashed border-slate-200 p-4 text-sm text-slate-500">
               {t("dashboard.myGroupsEmpty")}
             </div>
           ) : (
             <ul className="mt-4 divide-y rounded border">
-              {myGroups.map((g) => {
-                let rules: GroupRule[] = [];
-                try {
-                  rules = JSON.parse(g.rules_json ?? "[]") as GroupRule[];
-                } catch {
-                  rules = [];
-                }
+              {myScopes.map((s) => {
+                const adminRoute =
+                  s.kind === "group"
+                    ? `/admin/groups/${s.scope_id}`
+                    : `/admin/departments/${s.scope_id}`;
+                const canDrillIn =
+                  profile?.role === "admin" ||
+                  (profile?.role === "policy_lead" && s.kind === "group") ||
+                  (profile?.role === "policy_lead_department" &&
+                    s.kind === "department");
                 return (
-                  <li key={g.group_id} className="px-4 py-3">
+                  <li key={`${s.kind}:${s.scope_id}`} className="px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{g.name}</div>
-                        {g.description && (
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{s.name}</span>
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-slate-500">
+                            {s.kind === "group"
+                              ? t("dashboard.scopeGroup")
+                              : t("dashboard.scopeDepartment")}
+                          </span>
+                          {s.is_lead && (
+                            <span className="rounded bg-volt-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-volt-800">
+                              {t("dashboard.scopeLead")}
+                            </span>
+                          )}
+                        </div>
+                        {s.description && (
                           <div className="text-xs text-slate-500">
-                            {g.description}
+                            {s.description}
                           </div>
                         )}
                       </div>
-                      {/* Admins / policy_leads can navigate into the
-                          group page; regular members just see the rule
-                          summary. */}
-                      {(profile?.role === "admin" ||
-                        profile?.role === "policy_lead") && (
+                      {canDrillIn && (
                         <Link
-                          href={`/admin/groups/${g.group_id}`}
+                          href={adminRoute}
                           className="rounded border border-slate-300 px-3 py-1 text-xs hover:bg-slate-50"
                         >
                           {t("dashboard.openGroup")}
                         </Link>
                       )}
                     </div>
-                    {rules.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {rules.map((r, i) => (
-                          <span
-                            key={i}
-                            className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-                          >
-                            {ruleSummary(r, t)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(s.is_lead || s.can_edit) && (
+                        <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
+                          {t("dashboard.scopeCanEdit")}
+                        </span>
+                      )}
+                      {!s.can_edit && s.can_read && !s.is_lead && (
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {t("dashboard.scopeCanRead")}
+                        </span>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -649,36 +672,9 @@ function ApproverInboxes({
   );
 }
 
-interface GroupRule {
-  document_type: string | null;
-  status: string | null;
-  can_read: boolean;
-  can_edit: boolean;
-  can_comment: boolean;
-  can_approve: boolean;
-}
-
-/**
- * One-line summary of a group permission rule. Kept tiny on purpose —
- * the dashboard is a glance, the full table lives on the group detail
- * page.
- */
-function ruleSummary(r: GroupRule, t: (k: string) => string): string {
-  const scope =
-    r.document_type && r.status
-      ? `${r.document_type} · ${r.status}`
-      : r.document_type
-      ? r.document_type
-      : r.status
-      ? r.status
-      : t("dashboard.allDocs");
-  const verbs: string[] = [];
-  if (r.can_approve) verbs.push(t("dashboard.verbApprove"));
-  if (r.can_edit) verbs.push(t("dashboard.verbEdit"));
-  if (r.can_comment) verbs.push(t("dashboard.verbComment"));
-  if (r.can_read) verbs.push(t("dashboard.verbRead"));
-  return `${scope}: ${verbs.join(", ") || "—"}`;
-}
+// GroupRule + ruleSummary were retired by 015_scoped_permissions.
+// Per-doc-type rules no longer exist; a member just has can_read /
+// can_edit per scope. The widget now renders those flags directly.
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (

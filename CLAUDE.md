@@ -2,7 +2,17 @@
 
 Single source of truth for Volt's political documents (policies, positions,
 resolutions, statements, motions). Built on Next.js 15 (App Router, RSC) +
-Supabase (Postgres 17 + Auth + RLS) + Tiptap.
+self-hosted Postgres 17 (with RLS) + OIDC via Authentik + Tiptap.
+
+> **No-Supabase principle.** This project does not use Supabase in any
+> form — not the cloud platform, not the self-hosted Docker compose,
+> not any `@supabase/*` npm package. The data layer is a thin
+> hand-written PostgREST-style shim (`lib/db/client.ts`) on top of
+> the `postgres` driver. The auth layer is OIDC against Authentik
+> (`lib/auth/*`). Reintroducing Supabase — as a dependency, as a
+> hosting choice, or as terminology in code, comments, or
+> documentation — is forbidden. If a future requirement seems to
+> need it, raise the conflict explicitly before implementing.
 
 ## Inviolable principles
 
@@ -19,8 +29,10 @@ New requirements should be addable without rewriting existing modules.
   (`user_role`, `doc_type`, `doc_status`) — never hard-coded in client code.
 - Permission checks go through the `SECURITY DEFINER` helpers
   (`is_admin`, `is_editor_or_admin`, `doc_visible`, `doc_editable`,
-  `user_group_can_read/edit`). New permission sources extend these helpers,
-  not the policies that call them.
+  `can_approve_doc`, `can_publish_to_group`, `can_publish_to_department`).
+  New permission sources extend these helpers, not the policies that
+  call them. The legacy `user_group_can_read/edit` are kept as no-op
+  stubs for backward compatibility — do not call them.
 - Custom per-organization fields go through `metadata_fields` +
   `document_metadata_values`, never via schema migrations.
 - New languages go through `lib/i18n/dictionaries.ts`, never hard-coded.
@@ -33,9 +45,9 @@ syntax that locks us out of `pg_dump → restore elsewhere`.
 
 ### 2. Single source of truth in Postgres
 
-All Volt political documents — and everything attached to them — live in
-the Supabase Postgres of project `volt-policy-mgmt`
-(`pdrbckqvezqwxjehuhea`, eu-west-1).
+All Volt political documents — and everything attached to them — live
+in a single self-hosted Postgres 17 database running on the Volt-
+controlled Hetzner VPS in eu-west.
 
 **Implications**:
 - The editor, public library, exports, translations, amendments, search and
@@ -96,23 +108,27 @@ without `prefers-reduced-motion` respect.
 
 ### 5. SSO via OIDC for members and supporters
 
-Authentication runs over OIDC (Supabase Auth providers). **Never SAML** —
-the SAML add-on costs €50/month and is explicitly out of scope.
+Authentication runs over OIDC against the Volt-hosted Authentik
+instance. **Never SAML** — and never a managed-platform auth product
+either; this project's auth is fully owned by Volt.
 
 **Implications**:
-- Volt Auth is wired as a Supabase Keycloak/OIDC provider; the login UI
-  shows it as "Continue with Volt Auth".
+- Volt Auth (Authentik) is the OIDC issuer; the login UI shows it as
+  "Continue with Volt Auth". The handshake lives in
+  `app/api/auth/callback` and `lib/auth/oidc.ts`.
+- Sessions are signed JWT cookies (jose) — see `lib/auth/session.ts`.
+  Storage of identity is `public.profiles` keyed by `oidc_sub`.
 - Email/password is a fallback only. If V1 goes SSO-only, hide the
   email/password form rather than removing the route handlers — keeps
   ops/admin recovery options.
 - The public layer is the automatic extension of the SSO-gated member
   search: same data, same Postgres rows, RLS-filtered.
-- New auth needs (e.g. SCIM provisioning) extend OIDC, never substitute it
-  with SAML.
+- New auth needs (e.g. SCIM provisioning) extend OIDC and the
+  hand-rolled session layer, never substitute them.
 
-**Forbidden**: enabling Supabase's SAML add-on; building a custom auth
-system parallel to Supabase Auth; storing passwords or tokens outside
-Supabase Auth.
+**Forbidden**: introducing SAML; introducing a managed-platform auth
+product (no Supabase Auth, no Auth0, no Clerk); storing passwords or
+tokens anywhere outside Postgres + the signed session cookie.
 
 ### 6. Compliance, privacy and auditability (placeholder — to be tightened)
 
@@ -131,9 +147,10 @@ Supabase Auth.
   `app/(app)/documents/actions.ts` is the canonical implementation.
 - **EU Data Act / portability**: every document must remain exportable in
   a vendor-neutral format (`.md`, `.html`, `.docx`) via
-  `/api/documents/[id]/export`. The Supabase auto-REST + GraphQL APIs
-  cover programmatic access. Don't add features that store data only
-  reachable via a proprietary UI.
+  `/api/documents/[id]/export`. Programmatic access goes through the
+  typed `/api/*` JSON endpoints; SQL-direct access via psql remains
+  available for ops. Don't add features that store data only reachable
+  via a proprietary UI.
 - **Audit log**: schema-level table `audit_log` exists. Every privileged
   action (role change, status transition to/from `approved`, GDPR
   deletion, group permission change, bulk export, AI call on a non-public
@@ -144,8 +161,9 @@ Supabase Auth.
   the document's RLS visibility (don't ship draft text to a third party
   the document's own readers can't see). Rate-limit per-user when keys
   are configured.
-- **Data residency**: Supabase project is pinned to `eu-west-1`. Don't
-  add a region replica outside the EU without explicit sign-off.
+- **Data residency**: the Hetzner VPS is pinned to an EU region
+  (Falkenstein/Nuremberg). Don't add a region replica outside the EU
+  without explicit sign-off.
 - **Secrets**: API keys live in environment variables, never in the
   database, never in `git`. `.env.local` is in `.gitignore`.
 
@@ -163,17 +181,24 @@ we self-host it on Volt-controlled EU infrastructure rather than using the
 SaaS version. Cost minimization is a tie-breaker, not a top priority.
 
 **Production stack of record**:
-- **Compute / hosting**: Hetzner Cloud (Germany) running Coolify
-  (open source PaaS).
-- **Database + Auth + Storage + Realtime**: self-hosted Supabase (Docker
-  compose) on Hetzner. Postgres data lives on the Volt-controlled VPS.
-- **Email/SMTP**: Brevo (France) for transactional auth mails. Free tier
-  covers expected volume.
-- **LLM (drafting)**: Mistral AI (France) via La Plateforme. Self-hosted
-  fallback via Ollama on the same VPS if budget requires zero spend.
+- **Compute / hosting**: Hetzner Cloud (Germany), single VPS running
+  Docker Compose (`deploy/docker-compose.yml`).
+- **Database**: self-hosted Postgres 17 in the same compose. Data on
+  the `pg_data` volume; nightly dumps to Hetzner Storage Box.
+- **Auth (identity provider)**: self-hosted Authentik on the same VPS
+  (or a Volt-shared instance). OIDC issuer for this app.
+- **Auth (session layer)**: signed JWT cookies via `jose`, code in
+  `lib/auth/*`. No third-party auth SaaS.
+- **Realtime collab**: self-hosted Hocuspocus (Y.js websocket server)
+  in `deploy/hocuspocus/`.
+- **Email/SMTP**: Brevo (France) for transactional auth + notification
+  mails. Free tier covers expected volume.
+- **LLM (drafting)**: Mistral AI (France) via La Plateforme. Self-
+  hosted fallback via Ollama on the same VPS if budget requires zero
+  spend.
 - **Translation**: DeepL (Germany) with own API key.
-- **Grammar / language check**: LanguageTool self-hosted (German project,
-  Docker container alongside Supabase).
+- **Grammar / language check**: LanguageTool self-hosted (German
+  project, Docker container in the same compose).
 - **CEFR analysis**: in-process (`lib/cefr.ts`); upgradeable to a
   self-hosted Python micro-service.
 - **DNS**: deSEC (Germany) — free, DNSSEC-aware.
@@ -208,10 +233,13 @@ app/                     # Next.js App Router
   auth/                  # OIDC callback + signout
 components/              # client components: editor, comments, AI panel, nav
 lib/
-  supabase/              # browser, server, middleware clients
+  auth/                  # OIDC client + signed-cookie session layer
+  db/                    # postgres-js pool + PostgREST-shape shim
   i18n/                  # dictionaries + getT() server helper
   sanitize.ts, markdown.ts, diff.ts, cefr.ts, scim.ts, types.ts
 middleware.ts            # session refresh + auth gating for (app)/*
+db/migrations/           # SQL migrations applied in order via psql
+deploy/                  # docker-compose, Caddyfile, Hocuspocus, Brevo templates
 ```
 
 ## Database conventions
@@ -227,23 +255,27 @@ middleware.ts            # session refresh + auth gating for (app)/*
 
 ## Required environment variables
 
-Always: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+Always:
+- `DATABASE_URL` — `postgres://user:pass@host:5432/dbname` pointing at
+  the self-hosted Postgres.
+- `SESSION_COOKIE_SECRET` — secret for signing the JWT session cookie
+  (rotate on incident).
+- `NEXT_PUBLIC_APP_URL` — public origin, used to build the OIDC
+  redirect URI.
+
+OIDC (Authentik):
+- `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`,
+  `OIDC_REDIRECT_URI`.
 
 Optional, feature-gated:
 - `DEEPL_API_KEY` — real machine translation (else: stub returns source).
-- `ANTHROPIC_API_KEY` — AI drafting (else: stub).
-- `SUPABASE_SERVICE_ROLE_KEY` — SCIM provisioning + admin auth ops.
+- `MISTRAL_API_KEY` — AI drafting via La Plateforme (else: stub).
+- `BREVO_SMTP_HOST` / `_PORT` / `_USER` / `_PASS` — transactional mail.
 - `SCIM_TOKEN` — bearer token for `/api/scim/v2/*`.
 
-## In-flight migration
-
-**As of the current commit, the EU-pure migration is only partially done.**
-See `MIGRATION_TODO.md` in the repo root for the complete handoff. The new
-auth + DB layer (`lib/auth/*`, `lib/db/*`, `app/api/auth/*`) is written and
-type-checks cleanly, but `middleware.ts`, `app/login/page.tsx`, and ~80
-import sites still point at `lib/supabase/*` so the running app keeps
-working on the existing Supabase Cloud project during the cutover. Any
-new feature work should account for the upcoming swap.
+There are no Supabase env vars. If you see `NEXT_PUBLIC_SUPABASE_*`
+or `SUPABASE_SERVICE_ROLE_KEY` in any env file, that's a regression
+from the no-Supabase principle — strip them.
 
 ## When in doubt
 

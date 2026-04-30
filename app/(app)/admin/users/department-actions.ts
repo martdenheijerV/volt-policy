@@ -27,23 +27,23 @@ import { createClient } from "@/lib/db/client";
 type ActionResult = { ok: true } | { ok: false; error: string };
 
 async function requireAdmin(): Promise<
-  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>> }
+  | { ok: true; db: Awaited<ReturnType<typeof createClient>> }
   | { ok: false; error: string }
 > {
   try {
-    const supabase = await createClient();
+    const db = await createClient();
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await db.auth.getUser();
     if (!user) return { ok: false, error: "Not authenticated" };
-    const { data: me, error: meErr } = await supabase
+    const { data: me, error: meErr } = await db
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
     if (meErr) return { ok: false, error: meErr.message };
     if (me?.role !== "admin") return { ok: false, error: "Admin only" };
-    return { ok: true, supabase };
+    return { ok: true, db };
   } catch (e) {
     return {
       ok: false,
@@ -58,7 +58,7 @@ export async function createDepartment(formData: FormData): Promise<ActionResult
   const name = (formData.get("name") as string)?.trim();
   const description = ((formData.get("description") as string) || "").trim();
   if (!name) return { ok: false, error: "Department name is required" };
-  const { error } = await auth.supabase
+  const { error } = await auth.db
     .from("departments")
     .insert({ name, description: description || null });
   if (error) return { ok: false, error: error.message };
@@ -68,7 +68,7 @@ export async function createDepartment(formData: FormData): Promise<ActionResult
 export async function deleteDepartment(id: string): Promise<ActionResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
-  const { error } = await auth.supabase.from("departments").delete().eq("id", id);
+  const { error } = await auth.db.from("departments").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
@@ -96,7 +96,7 @@ export async function setDepartmentLead(
 
   if (assigned) {
     // 1. Insert the join row (idempotent — 23505 = already there).
-    const { error: insertErr } = await auth.supabase
+    const { error: insertErr } = await auth.db
       .from("department_leads")
       .insert({ department_id: departmentId, user_id: userId });
     if (insertErr && insertErr.code !== "23505") {
@@ -106,7 +106,7 @@ export async function setDepartmentLead(
     // 2. Promote the user's role to policy_lead_department unless
     //    they're already that or admin (admin outranks the scoped
     //    role; demoting an admin would be wrong).
-    const { data: target, error: roleReadErr } = await auth.supabase
+    const { data: target, error: roleReadErr } = await auth.db
       .from("profiles")
       .select("role")
       .eq("id", userId)
@@ -119,7 +119,7 @@ export async function setDepartmentLead(
       currentRole !== "admin" &&
       currentRole !== "policy_lead_department"
     ) {
-      const { error: roleWriteErr } = await auth.supabase
+      const { error: roleWriteErr } = await auth.db
         .from("profiles")
         .update({ role: "policy_lead_department" })
         .eq("id", userId);
@@ -129,7 +129,7 @@ export async function setDepartmentLead(
   }
 
   // Unassign — just delete the join row, don't touch role.
-  const { error } = await auth.supabase
+  const { error } = await auth.db
     .from("department_leads")
     .delete()
     .eq("department_id", departmentId)
@@ -150,7 +150,7 @@ export async function setUserPrimaryDepartment(
 ): Promise<ActionResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
-  const { error } = await auth.supabase
+  const { error } = await auth.db
     .from("profiles")
     .update({ primary_department_id: departmentId })
     .eq("id", userId);

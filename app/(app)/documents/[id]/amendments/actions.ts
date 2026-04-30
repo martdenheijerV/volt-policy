@@ -5,10 +5,10 @@ import { createClient } from "@/lib/db/client";
 import { saveNewVersion } from "../../actions";
 
 export async function proposeAmendment(formData: FormData) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
   const document_id = formData.get("document_id") as string;
@@ -18,13 +18,13 @@ export async function proposeAmendment(formData: FormData) {
   if (!target_quote || !replacement_text)
     throw new Error("Target quote and replacement text are required");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  const { error } = await supabase.from("amendments").insert({
+  const { error } = await db.from("amendments").insert({
     document_id,
     proposer_id: user.id,
     proposer_name_cached: profile?.full_name ?? user.email ?? null,
@@ -37,25 +37,25 @@ export async function proposeAmendment(formData: FormData) {
 }
 
 export async function toggleSupport(amendmentId: string, documentId: string) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("amendment_supporters")
     .select("amendment_id")
     .eq("amendment_id", amendmentId)
     .eq("user_id", user.id)
     .maybeSingle();
   if (existing) {
-    await supabase
+    await db
       .from("amendment_supporters")
       .delete()
       .eq("amendment_id", amendmentId)
       .eq("user_id", user.id);
   } else {
-    await supabase
+    await db
       .from("amendment_supporters")
       .insert({ amendment_id: amendmentId, user_id: user.id });
   }
@@ -67,20 +67,20 @@ export async function decideAmendment(
   documentId: string,
   decision: "accepted" | "rejected"
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { data: am, error: amErr } = await supabase
+  const { data: am, error: amErr } = await db
     .from("amendments")
     .select("target_quote,replacement_text")
     .eq("id", amendmentId)
     .single();
   if (amErr) throw amErr;
 
-  const { error: updErr } = await supabase
+  const { error: updErr } = await db
     .from("amendments")
     .update({
       status: decision,
@@ -92,7 +92,7 @@ export async function decideAmendment(
 
   if (decision === "accepted") {
     // Apply replacement to current document content and write a new version.
-    const { data: doc } = await supabase
+    const { data: doc } = await db
       .from("documents")
       .select("title,current_content")
       .eq("id", documentId)

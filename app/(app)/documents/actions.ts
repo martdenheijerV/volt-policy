@@ -13,13 +13,13 @@ export async function deleteUserGdpr(
   userId: string,
   mode: "keep_name" | "anonymize"
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -28,17 +28,17 @@ export async function deleteUserGdpr(
 
   if (mode === "anonymize") {
     // Wipe author name from all surviving records.
-    await supabase
+    await db
       .from("comments")
       .update({ author_name_cached: "Anonymous" })
       .eq("author_id", userId);
-    await supabase
+    await db
       .from("amendments")
       .update({ proposer_name_cached: "Anonymous" })
       .eq("proposer_id", userId);
   }
   // Drop the profile row. ON DELETE SET NULL on author_id keeps the comment body.
-  const { error } = await supabase.from("profiles").delete().eq("id", userId);
+  const { error } = await db.from("profiles").delete().eq("id", userId);
   if (error) throw error;
   await logAudit("user.gdpr_delete", "profile", userId, { mode });
   revalidatePath("/admin/users");
@@ -46,10 +46,10 @@ export async function deleteUserGdpr(
 }
 
 export async function createDocument(formData: FormData) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
   const title = (formData.get("title") as string)?.trim();
@@ -66,10 +66,25 @@ export async function createDocument(formData: FormData) {
   // checkbox sends "on" when checked, nothing when unchecked.
   const citations_enabled = formData.get("citations_enabled") === "on";
 
+  // Scope picker: a single radio chooses "group" or "department",
+  // followed by a select of the chosen kind. The form composes one
+  // hidden field, scope = "group:<id>" or "department:<id>", to avoid
+  // sending two empty FormData entries (group_id="" + department_id=
+  // "<id>") that would trip the documents_scope_xor_chk constraint.
+  const scope = ((formData.get("scope") as string) || "").trim();
+  let group_id: string | null = null;
+  let department_id: string | null = null;
+  if (scope.startsWith("group:")) group_id = scope.slice("group:".length) || null;
+  else if (scope.startsWith("department:"))
+    department_id = scope.slice("department:".length) || null;
+
   if (!title) throw new Error("Title is required");
+  if (!group_id && !department_id) {
+    throw new Error("Pick a working group or department for this document");
+  }
 
   // Validate required custom metadata fields
-  const { data: requiredFields } = await supabase
+  const { data: requiredFields } = await db
     .from("metadata_fields")
     .select("id,key,label,required,applies_to")
     .eq("required", true);
@@ -86,7 +101,7 @@ export async function createDocument(formData: FormData) {
   let slug = baseSlug;
   let i = 1;
   while (true) {
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("documents")
       .select("id")
       .eq("slug", slug)
@@ -96,7 +111,7 @@ export async function createDocument(formData: FormData) {
     slug = `${baseSlug}-${i}`;
   }
 
-  const { data: doc, error } = await supabase
+  const { data: doc, error } = await db
     .from("documents")
     .insert({
       title,
@@ -112,6 +127,11 @@ export async function createDocument(formData: FormData) {
       // the "save count". A fresh draft has no version yet by design.
       current_version: 0,
       citations_enabled,
+      // The XOR check on documents (migration 015) requires exactly
+      // one of these to be non-null. The form-side parser above
+      // guarantees that.
+      group_id,
+      department_id,
     })
     .select("id")
     .single();
@@ -119,7 +139,7 @@ export async function createDocument(formData: FormData) {
   if (error) throw error;
 
   // Save custom metadata values
-  const { data: allFields } = await supabase
+  const { data: allFields } = await db
     .from("metadata_fields")
     .select("id,key,applies_to");
   const applicable = (allFields ?? []).filter(
@@ -131,7 +151,7 @@ export async function createDocument(formData: FormData) {
     if (v.trim()) metaRows.push({ document_id: doc.id, field_id: f.id, value: v });
   }
   if (metaRows.length) {
-    await supabase.from("document_metadata_values").insert(metaRows);
+    await db.from("document_metadata_values").insert(metaRows);
   }
 
   await logAudit("document.created", "document", doc.id, { title, document_type });
@@ -145,12 +165,12 @@ export async function setMetadataValue(
   fieldId: string,
   value: string
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  const { error } = await supabase
+  const { error } = await db
     .from("document_metadata_values")
     .upsert(
       { document_id: documentId, field_id: fieldId, value },
@@ -165,19 +185,19 @@ export async function toggleVersionHidden(
   documentId: string,
   versionNumber: number
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
   if (me?.role !== "admin") throw new Error("Admin only");
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("hidden_versions")
     .eq("id", documentId)
@@ -186,7 +206,7 @@ export async function toggleVersionHidden(
   if (hidden.has(versionNumber)) hidden.delete(versionNumber);
   else hidden.add(versionNumber);
   const arr = Array.from(hidden).sort((a, b) => a - b);
-  const { error } = await supabase
+  const { error } = await db
     .from("documents")
     .update({ hidden_versions: arr })
     .eq("id", documentId);
@@ -221,16 +241,16 @@ export async function autosaveDraft(
   documentId: string,
   data: { title: string; content: string }
 ): Promise<{ ok: true; savedAt: string } | { ok: false; error: string }> {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated" };
 
   // Bail out if the doc is locked. We don't surface this as a user
   // error because the UI already shows the lock state — the autosave
   // just no-ops silently.
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("status")
     .eq("id", documentId)
@@ -245,7 +265,7 @@ export async function autosaveDraft(
   // RLS handles the auth check (only users with edit-rights can update
   // current_content). If RLS rejects the update we just return ok=false
   // and the editor won't show "Saved" — same UX as a network blip.
-  const { error } = await supabase
+  const { error } = await db
     .from("documents")
     .update({ title: data.title, current_content: data.content })
     .eq("id", documentId);
@@ -261,13 +281,13 @@ export async function saveNewVersion(
   documentId: string,
   data: { title: string; content: string; change_summary: string }
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { data: doc, error: fetchErr } = await supabase
+  const { data: doc, error: fetchErr } = await db
     .from("documents")
     .select("current_version,status,title,approved_version_number")
     .eq("id", documentId)
@@ -303,7 +323,7 @@ export async function saveNewVersion(
 
   const nextVersion = (doc?.current_version ?? 0) + 1;
 
-  const { error: insertErr } = await supabase.from("document_versions").insert({
+  const { error: insertErr } = await db.from("document_versions").insert({
     document_id: documentId,
     version_number: nextVersion,
     title: data.title,
@@ -315,7 +335,7 @@ export async function saveNewVersion(
     return { ok: false as const, error: insertErr.message };
   }
 
-  const { error: updateErr } = await supabase
+  const { error: updateErr } = await db
     .from("documents")
     .update({
       title: data.title,
@@ -344,11 +364,11 @@ export async function saveNewVersion(
     // Resolve admin emails + the editor's display name. We do this best-effort
     // and never let a mail failure break the save itself.
     try {
-      const { data: admins } = await supabase
+      const { data: admins } = await db
         .from("profiles")
         .select("email,full_name")
         .eq("role", "admin");
-      const { data: editor } = await supabase
+      const { data: editor } = await db
         .from("profiles")
         .select("full_name")
         .eq("id", user.id)
@@ -386,13 +406,13 @@ export async function updateStatus(
   status: DocStatus,
   options?: { changeSummary?: string }
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return { ok: false as const, error: "Not authenticated." };
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -406,7 +426,7 @@ export async function updateStatus(
   }
 
   // Fetch current state — needed to gate transitions out of `approved`.
-  const { data: existingDoc } = await supabase
+  const { data: existingDoc } = await db
     .from("documents")
     .select("status,owner_id")
     .eq("id", documentId)
@@ -478,7 +498,7 @@ export async function updateStatus(
     // Mint a new official version. Number = (max existing) + 1, so V1
     // is the first-ever approval, V2 the second, etc. The audit log
     // and history pages key off these rows.
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("document_versions")
       .select("version_number")
       .eq("document_id", documentId)
@@ -493,7 +513,7 @@ export async function updateStatus(
     // Snapshot current_content into a new version row. Title goes along
     // for the ride so a future title change doesn't retroactively
     // rewrite history.
-    const { data: live } = await supabase
+    const { data: live } = await db
       .from("documents")
       .select("title,current_content,pending_change_summary")
       .eq("id", documentId)
@@ -507,7 +527,7 @@ export async function updateStatus(
         options?.changeSummary?.trim() ||
         live.pending_change_summary?.trim() ||
         null;
-      const { error: insErr } = await supabase
+      const { error: insErr } = await db
         .from("document_versions")
         .insert({
           document_id: documentId,
@@ -535,7 +555,7 @@ export async function updateStatus(
     patch.pending_change_summary = null;
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from("documents")
     .update(patch)
     .eq("id", documentId);
@@ -556,13 +576,13 @@ export async function updateStatus(
 export async function approvePendingChanges(
   documentId: string
 ): Promise<{ ok: true; version: number } | { ok: false; error: string }> {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -578,14 +598,14 @@ export async function approvePendingChanges(
     };
   }
 
-  const { data: cur } = await supabase
+  const { data: cur } = await db
     .from("documents")
     .select("current_version,status")
     .eq("id", documentId)
     .maybeSingle();
   if (!cur) return { ok: false, error: "Document not found." };
 
-  const { error } = await supabase
+  const { error } = await db
     .from("documents")
     .update({
       approved_version_number: cur.current_version,
@@ -615,13 +635,13 @@ export async function rejectPendingChanges(
   documentId: string,
   reason?: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -637,7 +657,7 @@ export async function rejectPendingChanges(
     };
   }
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("approved_version_number,current_version,title")
     .eq("id", documentId)
@@ -657,7 +677,7 @@ export async function rejectPendingChanges(
     return { ok: false, error: "There are no pending changes to reject." };
   }
 
-  const { data: snap } = await supabase
+  const { data: snap } = await db
     .from("document_versions")
     .select("content,title")
     .eq("document_id", documentId)
@@ -673,7 +693,7 @@ export async function rejectPendingChanges(
   // Insert a new version that re-publishes the approved content so the
   // history stays linear and a future "restore" is easy to spot.
   const nextVersion = doc.current_version + 1;
-  await supabase.from("document_versions").insert({
+  await db.from("document_versions").insert({
     document_id: documentId,
     version_number: nextVersion,
     title: snap.title,
@@ -684,7 +704,7 @@ export async function rejectPendingChanges(
     author_id: user.id,
   });
 
-  const { error } = await supabase
+  const { error } = await db
     .from("documents")
     .update({
       title: snap.title,
@@ -711,13 +731,13 @@ export async function restoreVersion(
   documentId: string,
   versionNumber: number
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { data: v, error } = await supabase
+  const { data: v, error } = await db
     .from("document_versions")
     .select("title,content")
     .eq("document_id", documentId)
@@ -743,19 +763,19 @@ export async function addComment(
   parentId: string | null,
   kind: CommentKind = "general"
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  const { error } = await supabase.from("comments").insert({
+  const { error } = await db.from("comments").insert({
     document_id: documentId,
     author_id: user.id,
     author_name_cached: profile?.full_name ?? user.email ?? null,
@@ -785,13 +805,13 @@ export async function deleteDocument(
   documentId: string,
   confirmation: { typedTitle: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated" };
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title,owner_id")
     .eq("id", documentId)
@@ -814,7 +834,7 @@ export async function deleteDocument(
   // Authorization: admin / owner / scoped policy_lead. Mirrors the RLS
   // policy in migration 010 — defense in depth so we return a clear
   // error instead of "0 rows deleted".
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -838,7 +858,7 @@ export async function deleteDocument(
     deleted_by: user.id,
   });
 
-  const { error } = await supabase
+  const { error } = await db
     .from("documents")
     .delete()
     .eq("id", documentId);
@@ -853,8 +873,8 @@ export async function deleteDocument(
 }
 
 export async function resolveComment(commentId: string, resolved: boolean) {
-  const supabase = await createClient();
-  const { error } = await supabase
+  const db = await createClient();
+  const { error } = await db
     .from("comments")
     .update({ resolved })
     .eq("id", commentId);

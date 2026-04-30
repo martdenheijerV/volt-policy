@@ -1,9 +1,10 @@
-# Volt Policy Management — full self-hosted stack on Hetzner
-# Place alongside Supabase's official self-hosted compose (see DEPLOY.md).
+# Volt Policy Management — full self-hosted stack on Hetzner.
 #
-# Networks:
-#   - `volt`: internal between this stack's services
-#   - `supabase_default`: Supabase's compose network (joined as external)
+# Single compose, no external networks: this stack ships its own
+# Postgres 17 container (see `db` below) so there's no dependency on
+# any third-party platform's compose. Backups live on the host via
+# the `pg_data` volume; nightly dumps go to Hetzner Storage Box via
+# the `backup` service (see DEPLOY.md for details).
 #
 # Reverse proxy: Caddy auto-issues Let's Encrypt certs for the listed
 # subdomains. Point your DNS A-records at the VPS IP first.
@@ -24,6 +25,23 @@ services:
     networks:
       - volt
 
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-volt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-volt_policy}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Migrations directory is mounted read-only; apply with
+      #   docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB -f /migrations/<file>.sql
+      - ../db/migrations:/migrations:ro
+    expose:
+      - "5432"
+    networks:
+      - volt
+
   app:
     build:
       context: ..
@@ -34,11 +52,11 @@ services:
     expose:
       - "3000"
     depends_on:
+      - db
       - languagetool
       - hocuspocus
     networks:
       - volt
-      - supabase_default
 
   languagetool:
     image: erikvl87/languagetool:latest
@@ -62,15 +80,15 @@ services:
       HOCUS_SECRET: ${HOCUS_SECRET}
     expose:
       - "1234"
+    depends_on:
+      - db
     networks:
       - volt
-      - supabase_default
 
 volumes:
   caddy_data:
   caddy_config:
+  pg_data:
 
 networks:
   volt:
-  supabase_default:
-    external: true

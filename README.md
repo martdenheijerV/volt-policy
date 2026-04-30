@@ -96,9 +96,11 @@ middleware.ts                         # JWT cookie check + auth gating
 
 ## Database schema
 
-Migrations live in `supabase/migrations/`. Apply them in order against the
-self-hosted Postgres on Hetzner; `005_eu_pure_auth.sql` is the one that
-removes the `auth.users` linkage.
+Migrations live in `db/migrations/`. Apply them in order against the
+self-hosted Postgres on Hetzner via psql. `005_eu_pure_auth.sql` is
+the historical cut-over that decoupled the schema from any external
+auth provider's `auth.users` table; everything from 006 onwards
+assumes the project's own `profiles` table is the identity root.
 
 - **profiles** — keyed by internal `id` (uuid), unique by `oidc_sub`. The
   OIDC callback (`/api/auth/callback`) upserts on `oidc_sub`.
@@ -147,27 +149,27 @@ Role checks go through `SECURITY DEFINER` functions
 | 27 | Document restoration | "Restore" button creates a new version from an old one |
 | 28 | Structural formatting only | Markdown (no colors/fonts), renderer strips inline HTML |
 | 29 | Volt style | Tailwind theme: volt purple palette, Ubuntu font stack |
-| 36 | Export / no lock-in | Storage is plain Markdown text; Supabase = standard Postgres |
+| 36 | Export / no lock-in | Storage is plain Markdown text on standard self-hosted Postgres 17 |
 
 ### Intentionally stubbed or out-of-scope for this session
 
 | # | Requirement | Next step |
 |---|---|---|
-| 5 | SSO (OIDC, Volt Auth) | Configure Supabase Auth → SSO providers; hide password login |
+| 5 | SSO (OIDC, Volt Auth) | Configure Authentik → SSO providers; hide password login |
 | 6 | Chat per document | Add a `discussion_threads` table or embed Matrix/Mattermost iframe |
 | 7 | Help center / guidelines | Add MDX-powered `/help` section |
 | 9 | Default system language | Already have `profiles.language_pref`; wire up an i18n layer (e.g. `next-intl`) |
 | 13 | Text change permission (formal input required) | Already have `change_summary` input; make required server-side for review/approved docs |
 | 14 | Integrated amendment tool | Add `amendments` table + MotionTools-style inline amendments |
-| 15 | Real-time multi-user collaboration | Swap the Markdown editor for Y.js/Tiptap over Supabase Realtime |
+| 15 | Real-time multi-user collaboration | Tiptap + Y.js with the self-hosted Hocuspocus service in `deploy/hocuspocus/` |
 | 16 | Default suggestion mode | Toggle already present in editor; needs persistence of suggestions vs. direct edits |
 | 19 | Language/grammar checks | Integrate LanguageTool API |
-| 20/21 | AI: similar docs / drafting | pgvector + embeddings in Supabase + Anthropic API |
+| 20/21 | AI: similar docs / drafting | pgvector embeddings in self-hosted Postgres + Mistral La Plateforme |
 | 25 | Version statistics | Materialized view over `document_versions` |
 | 30-33 | Translation (auto, DeepL, verified) | Add `translations` table keyed to `(document_id, language)`; DeepL side-by-side UI |
 | 34 | Citation management (Zotero) | Zotero OAuth + bibliography field on documents |
 | 35, 40 | Printing / accessible export | Print stylesheet + server endpoint returning `.md`/`.html`/`.docx` |
-| 37 | EU Data Act API | Supabase auto-exposes REST + GraphQL; document the OpenAPI schema |
+| 37 | EU Data Act API | Document the typed `/api/*` JSON endpoints; emit OpenAPI from them |
 | 38 | SCIM provisioning | Add `/api/scim/v2/*` route handlers reading `profiles` |
 | 39 | CEFR complexity analysis | Call the `mock-cminor` Python service on save |
 | 41 | Document import (PDF/DOCX) | Add upload → pandoc or unstructured.io → Markdown |

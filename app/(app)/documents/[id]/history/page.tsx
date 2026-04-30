@@ -18,10 +18,10 @@ export default async function HistoryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("*")
     .eq("id", id)
@@ -31,9 +31,9 @@ export default async function HistoryPage({
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("*")
     .eq("id", user?.id ?? "")
@@ -46,7 +46,7 @@ export default async function HistoryPage({
       profile?.role === "editor" ||
       doc.owner_id === user.id);
 
-  const { data: versions } = await supabase
+  const { data: versions } = await db
     .from("document_versions")
     .select("*")
     .eq("document_id", id)

@@ -109,18 +109,28 @@ export async function canDecideEditRequest(requestId: string): Promise<boolean> 
 
 /**
  * The full participants picture for a single document — used by the
- * "Who has access" panel. Returns three buckets:
+ * "Who has access" panel. Returns four buckets:
  *
  *   * owner: the document creator (can edit by default).
  *   * permitted: users with explicit document_permissions rows. Each
  *     entry includes can_edit/can_comment so the UI can render the
  *     correct chip.
- *   * groupMembers: users who get access via a group membership +
- *     group_doc_permissions rule that matches this doc's
- *     (document_type, status). Deduplicated; one row per user.
+ *   * scopeMembers: users who get access via the doc's scope — either
+ *     `user_group_member_permissions` (when documents.group_id is set)
+ *     or `department_member_permissions` (when documents.department_id
+ *     is set). One row per user; flags reflect their effective rights.
+ *   * scopeLeads: users with lead status on the doc's scope. Always
+ *     have full rights (read/edit/approve) within scope, regardless
+ *     of any per-member row.
  *
  * Pending edit-rights requests come from `listEditRequestsForDoc` — this
  * function focuses on already-granted access.
+ *
+ * Schema rationale: we no longer surface "via group X due to matrix
+ * rule on doc_type Y" — since 015_scoped_permissions, access is one
+ * level simpler (you're in the scope, period). The `via_scope_kind` /
+ * `via_scope_name` columns let the UI label whether the source was a
+ * working group or a department.
  */
 export interface DocParticipants {
   owner: { id: string; name: string | null } | null;
@@ -131,15 +141,23 @@ export interface DocParticipants {
     can_edit: boolean;
     can_comment: boolean;
   }>;
-  groupMembers: Array<{
+  scopeMembers: Array<{
     user_id: string;
     name: string | null;
     role: string | null;
-    via_group: string;
-    via_group_id: string;
+    via_scope_kind: "group" | "department";
+    via_scope_id: string;
+    via_scope_name: string;
+    can_read: boolean;
     can_edit: boolean;
-    can_comment: boolean;
-    can_approve: boolean;
+  }>;
+  scopeLeads: Array<{
+    user_id: string;
+    name: string | null;
+    role: string | null;
+    via_scope_kind: "group" | "department";
+    via_scope_id: string;
+    via_scope_name: string;
   }>;
 }
 
@@ -147,7 +165,13 @@ export async function getDocParticipants(
   documentId: string
 ): Promise<DocParticipants> {
   const userId = await getCurrentUserId();
-  if (!userId) return { owner: null, permitted: [], groupMembers: [] };
+  if (!userId)
+    return {
+      owner: null,
+      permitted: [],
+      scopeMembers: [],
+      scopeLeads: [],
+    };
   return await withUser(userId, async (sql) => {
     const ownerRows = await sql<{ id: string; name: string | null }[]>`
       select p.id, p.full_name as name
@@ -167,46 +191,83 @@ export async function getDocParticipants(
        where dp.document_id = ${documentId}
        order by p.full_name
     `;
-    // Group-derived access: a user is in a group; that group has a
-    // permission rule whose document_type/status matches this doc. We
-    // collapse multiple rules per (group, user) by max-OR-ing the
-    // capability flags so the panel shows the user's effective access.
-    const groupMembers = await sql<DocParticipants["groupMembers"]>`
+    // Scope members: union of group members (when doc.group_id is
+    // set) and department members (when doc.department_id is set). The
+    // XOR check on documents guarantees only one branch returns rows.
+    const scopeMembers = await sql<DocParticipants["scopeMembers"]>`
       with d as (
-        select id, document_type, status from public.documents
+        select id, group_id, department_id from public.documents
          where id = ${documentId}
-      ),
-      matching_perms as (
-        select gp.group_id,
-               bool_or(gp.can_edit)    as can_edit,
-               bool_or(gp.can_comment) as can_comment,
-               bool_or(gp.can_approve) as can_approve
-          from public.group_doc_permissions gp
-          join d on true
-         where (gp.document_type is null or gp.document_type = d.document_type)
-           and (gp.status        is null or gp.status        = d.status)
-         group by gp.group_id
       )
-      select m.user_id,
+      select ugmp.user_id,
              p.full_name as name,
              p.role,
-             g.name      as via_group,
-             g.id        as via_group_id,
-             mp.can_edit,
-             mp.can_comment,
-             mp.can_approve
-        from matching_perms mp
-        join public.user_group_members m on m.group_id = mp.group_id
-        join public.user_groups g        on g.id      = mp.group_id
-        left join public.profiles p      on p.id      = m.user_id
-       order by p.full_name nulls last
+             'group'::text as via_scope_kind,
+             g.id   as via_scope_id,
+             g.name as via_scope_name,
+             ugmp.can_read,
+             ugmp.can_edit
+        from d
+        join public.user_group_member_permissions ugmp
+          on ugmp.group_id = d.group_id
+        join public.user_groups g on g.id = ugmp.group_id
+        left join public.profiles p on p.id = ugmp.user_id
+       where d.group_id is not null
+       union all
+      select dmp.user_id,
+             p.full_name as name,
+             p.role,
+             'department'::text as via_scope_kind,
+             dep.id   as via_scope_id,
+             dep.name as via_scope_name,
+             dmp.can_read,
+             dmp.can_edit
+        from d
+        join public.department_member_permissions dmp
+          on dmp.department_id = d.department_id
+        join public.departments dep on dep.id = dmp.department_id
+        left join public.profiles p on p.id = dmp.user_id
+       where d.department_id is not null
+       order by name nulls last
+    `;
+    // Scope leads: same idea, from user_group_leads / department_leads.
+    const scopeLeads = await sql<DocParticipants["scopeLeads"]>`
+      with d as (
+        select id, group_id, department_id from public.documents
+         where id = ${documentId}
+      )
+      select ugl.user_id,
+             p.full_name as name,
+             p.role,
+             'group'::text as via_scope_kind,
+             g.id   as via_scope_id,
+             g.name as via_scope_name
+        from d
+        join public.user_group_leads ugl on ugl.group_id = d.group_id
+        join public.user_groups g on g.id = ugl.group_id
+        left join public.profiles p on p.id = ugl.user_id
+       where d.group_id is not null
+       union all
+      select dl.user_id,
+             p.full_name as name,
+             p.role,
+             'department'::text as via_scope_kind,
+             dep.id   as via_scope_id,
+             dep.name as via_scope_name
+        from d
+        join public.department_leads dl on dl.department_id = d.department_id
+        join public.departments dep on dep.id = dl.department_id
+        left join public.profiles p on p.id = dl.user_id
+       where d.department_id is not null
+       order by name nulls last
     `;
     return {
       owner: ownerRows[0]
         ? { id: ownerRows[0].id, name: ownerRows[0].name }
         : null,
       permitted,
-      groupMembers,
+      scopeMembers,
+      scopeLeads,
     };
   });
 }

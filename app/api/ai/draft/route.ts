@@ -11,10 +11,10 @@ import { logAudit } from "@/lib/audit";
  * Audit-logged per principle #6.
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { prompt, type } = await request.json();
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const { data: ctx } = await supabase
+  const { data: ctx } = await db
     .from("documents")
     .select("title,current_content")
     .eq("status", "approved")

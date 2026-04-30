@@ -6,13 +6,13 @@ import { slugify } from "@/lib/utils";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   let slug = baseSlug;
   let i = 1;
   while (true) {
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("documents")
       .select("id")
       .eq("slug", slug)
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     slug = `${baseSlug}-${i}`;
   }
 
-  const { data: doc, error } = await supabase
+  const { data: doc, error } = await db
     .from("documents")
     .insert({
       title,
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await supabase.from("document_versions").insert({
+  await db.from("document_versions").insert({
     document_id: doc.id,
     version_number: 1,
     title,

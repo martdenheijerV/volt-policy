@@ -10,16 +10,16 @@ export default async function TranslationEditorPage({
   params: Promise<{ id: string; lang: string }>;
 }) {
   const { id, lang } = await params;
-  const supabase = await createClient();
+  const db = await createClient();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title,language,current_content,current_version")
     .eq("id", id)
     .maybeSingle();
   if (!doc) notFound();
 
-  const { data: tr } = await supabase
+  const { data: tr } = await db
     .from("document_translations")
     .select("*")
     .eq("document_id", id)

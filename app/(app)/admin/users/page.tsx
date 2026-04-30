@@ -12,13 +12,13 @@ import { getTr } from "@/lib/i18n/server";
 import type { Profile } from "@/lib/types";
 
 export default async function AdminUsersPage() {
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user?.id ?? "")
@@ -28,7 +28,7 @@ export default async function AdminUsersPage() {
     redirect("/dashboard");
   }
 
-  const { data: profiles } = await supabase
+  const { data: profiles } = await db
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: false });
@@ -37,11 +37,11 @@ export default async function AdminUsersPage() {
   // round-trips kept separate so a slow leads query doesn't block
   // the users table — both happen in parallel below.
   const [{ data: departments }, { data: leads }] = await Promise.all([
-    supabase
+    db
       .from("departments")
       .select("id,name,description")
       .order("name"),
-    supabase.from("department_leads").select("department_id,user_id"),
+    db.from("department_leads").select("department_id,user_id"),
   ]);
 
   const leadsByDept = new Map<string, string[]>();

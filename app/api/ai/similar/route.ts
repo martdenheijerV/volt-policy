@@ -6,11 +6,11 @@ import { createClient } from "@/lib/db/client";
  * search. Replace with pgvector + embeddings (#20) for true semantic similarity.
  */
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const db = await createClient();
   const { query, excludeId } = await request.json();
   if (!query) return NextResponse.json({ error: "query missing" }, { status: 400 });
 
-  let q = supabase
+  let q = db
     .from("documents")
     .select("id,title,slug,document_type,language,status,updated_at")
     .textSearch("search_tsv", query, { type: "websearch" })

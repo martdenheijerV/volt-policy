@@ -71,8 +71,8 @@ export default function HelpAIAssistant() {
           <T>
             Drafting (when configured) routes through Mistral via La
             Plateforme — France-based. DeepL (Germany) handles translation.
-            LanguageTool runs self-hosted on the same VPS as Supabase. CEFR
-            analysis is in-process. No data leaves the EU.
+            LanguageTool runs self-hosted on the same VPS as the database.
+            CEFR analysis is in-process. No data leaves the EU.
           </T>
         </li>
         <li>

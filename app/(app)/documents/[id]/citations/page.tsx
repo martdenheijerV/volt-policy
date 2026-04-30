@@ -11,16 +11,16 @@ export default async function CitationsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title")
     .eq("id", id)
     .maybeSingle();
   if (!doc) notFound();
 
-  const { data: cites } = await supabase
+  const { data: cites } = await db
     .from("citations")
     .select("*")
     .eq("document_id", id)

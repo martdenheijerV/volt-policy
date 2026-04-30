@@ -5,16 +5,16 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/db/client";
 
 export async function createTranslation(formData: FormData) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
   const document_id = formData.get("document_id") as string;
   const language = (formData.get("language") as string)?.toLowerCase();
 
-  const { data: doc, error: docErr } = await supabase
+  const { data: doc, error: docErr } = await db
     .from("documents")
     .select("title,current_content,current_version,language")
     .eq("id", document_id)
@@ -24,7 +24,7 @@ export async function createTranslation(formData: FormData) {
   if (language === doc.language)
     throw new Error("Pick a target language different from the source.");
 
-  const { error } = await supabase
+  const { error } = await db
     .from("document_translations")
     .insert({
       document_id,
@@ -52,10 +52,10 @@ export async function saveTranslation(
   language: string,
   data: { title: string; content: string; status: "machine" | "in_review" | "verified" }
 ) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
   const patch: Record<string, unknown> = {
@@ -67,7 +67,7 @@ export async function saveTranslation(
     patch.verified_at = new Date().toISOString();
     patch.verified_by = user.id;
   }
-  const { error } = await supabase
+  const { error } = await db
     .from("document_translations")
     .update(patch)
     .eq("document_id", documentId)

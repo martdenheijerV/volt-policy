@@ -15,12 +15,12 @@ export async function POST(req: Request) {
   });
   // Persist on profile if signed in
   try {
-    const supabase = await createClient();
+    const db = await createClient();
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await db.auth.getUser();
     if (user) {
-      await supabase.from("profiles").update({ language_pref: lang }).eq("id", user.id);
+      await db.from("profiles").update({ language_pref: lang }).eq("id", user.id);
     }
   } catch {
     /* ignore */

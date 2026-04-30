@@ -64,11 +64,12 @@ export default function HelpExport() {
       </h2>
       <p>
         <T>
-          All data is exposed via Supabase&apos;s auto-generated REST and
-          GraphQL APIs against the same Postgres rows the UI reads —
-          that&apos;s the single-source-of-truth principle in action. See
-          /api/openapi.json for the schema, or query GraphQL directly at
-          /graphql/v1.
+          All data is exposed through the same Postgres rows the UI reads —
+          that&apos;s the single-source-of-truth principle in action. SQL
+          access lives behind the auth layer; programmatic clients can
+          either log in via OIDC and use the JSON endpoints under
+          /api/* or run read-only reports directly against the
+          read-replica when one is provisioned.
         </T>
       </p>
       <p>

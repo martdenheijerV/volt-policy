@@ -10,16 +10,16 @@ export default async function TranslationsListPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const db = await createClient();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title,language,current_version")
     .eq("id", id)
     .maybeSingle();
   if (!doc) notFound();
 
-  const { data: trs } = await supabase
+  const { data: trs } = await db
     .from("document_translations")
     .select("language,status,source_version,verified_at,updated_at")
     .eq("document_id", id);

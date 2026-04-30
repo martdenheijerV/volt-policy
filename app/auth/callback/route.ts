@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
 /**
- * Deprecated path — Supabase OAuth callback. The EU-pure callback lives at
- * /api/auth/callback. Any stale redirect URL configured against this path
- * will be forwarded with the OIDC handshake parameters preserved.
+ * Deprecated path — legacy OAuth callback URL. The current callback
+ * lives at /api/auth/callback. Any stale redirect URL configured
+ * against this path is forwarded with the OIDC handshake parameters
+ * preserved so existing identity-provider configurations keep working.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);

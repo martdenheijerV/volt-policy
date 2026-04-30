@@ -6,10 +6,10 @@ export default async function LibraryLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
   return (
     <div className="min-h-screen bg-slate-50">

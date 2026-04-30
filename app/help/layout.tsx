@@ -20,11 +20,11 @@ export default async function HelpLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
   // Translate sidebar labels in one batch.
   const sectionLabels = await Promise.all(

@@ -14,11 +14,11 @@ import { createClient } from "@/lib/db/client";
  * unauthorised users from ever rendering the tab strip.
  */
 export default async function AdminIndex() {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
-  const { data: me } = await supabase
+  } = await db.auth.getUser();
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user?.id ?? "")

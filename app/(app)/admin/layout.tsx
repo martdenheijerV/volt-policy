@@ -7,16 +7,22 @@ import AdminTabs from "./AdminTabs";
 /**
  * /admin layout — the "Beheer" surface. Three tabs:
  *
- *   1. Personen       — user accounts + role assignments + the
- *                       department layer (organisational units like
- *                       Volt EP, Volt NL) and their leads. The
- *                       department leads drive the policy_lead_department
- *                       role's scope.
- *   2. Document types — matrix of doc_type × group with per-cell
- *                       read/edit toggles. The single place where doc
- *                       type access is configured.
- *   3. Groepen         — working-group CRUD, group membership, and
- *                       per-group policy_lead assignments.
+ *   1. Personen   — user accounts + role assignments. The departments
+ *                   block at the bottom of this tab is the admin's
+ *                   surface for creating departments and assigning
+ *                   department leads (drivers of the
+ *                   policy_lead_department role's scope).
+ *   2. Groepen    — working-group CRUD, group membership, per-group
+ *                   policy_lead assignments, and per-member read/edit
+ *                   toggles. After 015_scoped_permissions, this is
+ *                   the canonical surface for "who can do what" inside
+ *                   a working group.
+ *   3. Afdelingen — the same per-member toggle UI as Groepen, scoped
+ *                   to organisational departments (Volt EP / Volt NL /
+ *                   …). Drills down into /admin/departments/<id>.
+ *
+ * The previous "Document types" matrix tab is gone — replaced by the
+ * per-scope per-member model that 015_scoped_permissions established.
  *
  * Admin-only — non-admins are kicked back to /dashboard before any
  * tab content renders. The single exception is /admin/groups, which
@@ -26,8 +32,8 @@ import AdminTabs from "./AdminTabs";
  */
 const TABS = [
   { slug: "users", label: "Personen" },
-  { slug: "document-types", label: "Document types" },
   { slug: "groups", label: "Groepen" },
+  { slug: "departments", label: "Afdelingen" },
 ];
 
 export default async function AdminLayout({
@@ -35,12 +41,12 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
-  const { data: me } = await supabase
+  } = await db.auth.getUser();
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user?.id ?? "")
@@ -64,7 +70,7 @@ export default async function AdminLayout({
         </h1>
         <p className="mt-1 text-sm text-slate-600">
           <T>
-            Manage people, document types and groups for the whole
+            Manage people, working groups and departments for the whole
             organisation.
           </T>
         </p>

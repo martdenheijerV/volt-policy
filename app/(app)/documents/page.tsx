@@ -14,9 +14,9 @@ export default async function DocumentsPage({
   const { t } = await getT();
   const { tr } = await getTr();
   const params = await searchParams;
-  const supabase = await createClient();
+  const db = await createClient();
 
-  let query = supabase
+  let query = db
     .from("documents")
     .select("*")
     .order("updated_at", { ascending: false });

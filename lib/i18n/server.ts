@@ -12,12 +12,12 @@ export async function getLang(): Promise<Lang> {
     return cookieLang as Lang;
   }
   try {
-    const supabase = await createClient();
+    const db = await createClient();
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await db.auth.getUser();
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile } = await db
         .from("profiles")
         .select("language_pref")
         .eq("id", user.id)

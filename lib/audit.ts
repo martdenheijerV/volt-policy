@@ -11,17 +11,17 @@ export async function logAudit(
   details: Record<string, unknown> = {}
 ): Promise<void> {
   try {
-    const supabase = await createClient();
+    const db = await createClient();
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await db.auth.getUser();
     if (!user) return;
-    const { data: profile } = await supabase
+    const { data: profile } = await db
       .from("profiles")
       .select("full_name")
       .eq("id", user.id)
       .maybeSingle();
-    await supabase.from("audit_log").insert({
+    await db.from("audit_log").insert({
       actor_id: user.id,
       actor_name_cached: profile?.full_name ?? user.email ?? null,
       action,

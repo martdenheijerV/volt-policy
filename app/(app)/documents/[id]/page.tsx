@@ -51,13 +51,13 @@ export default async function DocumentPage({
   const { id } = await params;
   const { t } = await getT();
   const { tr } = await getTr();
-  const supabase = await createClient();
+  const db = await createClient();
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("*")
     .eq("id", id)
@@ -65,39 +65,39 @@ export default async function DocumentPage({
 
   if (!doc) notFound();
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("*")
     .eq("id", user?.id ?? "")
     .maybeSingle<Profile>();
 
-  const { data: comments } = await supabase
+  const { data: comments } = await db
     .from("comments")
     .select("*")
     .eq("document_id", id)
     .order("created_at", { ascending: true });
 
-  const { data: permission } = await supabase
+  const { data: permission } = await db
     .from("document_permissions")
     .select("can_edit")
     .eq("document_id", id)
     .eq("user_id", user?.id ?? "")
     .maybeSingle();
 
-  const { data: discussion } = await supabase
+  const { data: discussion } = await db
     .from("document_discussions")
     .select("platform,url")
     .eq("document_id", id)
     .maybeSingle();
 
-  const { data: metaFields } = await supabase
+  const { data: metaFields } = await db
     .from("metadata_fields")
     .select("id,key,label,field_type,options,required,applies_to,display_order")
     .order("display_order");
   const applicableFields = (metaFields ?? []).filter(
     (f) => !f.applies_to || f.applies_to === doc.document_type
   );
-  const { data: metaValues } = await supabase
+  const { data: metaValues } = await db
     .from("document_metadata_values")
     .select("field_id,value")
     .eq("document_id", id);
@@ -159,7 +159,7 @@ export default async function DocumentPage({
   let reviewTitle: string | null = null;
   let reviewContent: string | null = null;
   if (doc.status === "review" && doc.review_version_number) {
-    const { data: snap } = await supabase
+    const { data: snap } = await db
       .from("document_versions")
       .select("title,content")
       .eq("document_id", doc.id)
@@ -223,7 +223,7 @@ export default async function DocumentPage({
   let pendingAuthorName: string | null = null;
   let pendingChangeSummary: string | null = null;
   if (hasPendingReview) {
-    const { data: pendingVersion } = await supabase
+    const { data: pendingVersion } = await db
       .from("document_versions")
       .select("author_id,change_summary")
       .eq("document_id", doc.id)
@@ -231,7 +231,7 @@ export default async function DocumentPage({
       .maybeSingle<{ author_id: string | null; change_summary: string | null }>();
     pendingChangeSummary = pendingVersion?.change_summary ?? null;
     if (pendingVersion?.author_id) {
-      const { data: author } = await supabase
+      const { data: author } = await db
         .from("profiles")
         .select("full_name")
         .eq("id", pendingVersion.author_id)
@@ -751,7 +751,9 @@ async function buildAccessControlsLabels(
     canEdit,
     canComment,
     canApprove,
+    leadLabel,
     viaGroupTpl,
+    viaDepartmentTpl,
     revoke,
     promoteToEdit,
     noOtherParticipants,
@@ -776,7 +778,9 @@ async function buildAccessControlsLabels(
     tr("Edit"),
     tr("Comment"),
     tr("Approve"),
-    tr("via {name}"),
+    tr("Lead"),
+    tr("via group {name}"),
+    tr("via department {name}"),
     tr("Revoke"),
     tr("Grant edit"),
     tr("Only the owner can edit so far."),
@@ -802,7 +806,9 @@ async function buildAccessControlsLabels(
     canEdit,
     canComment,
     canApprove,
+    leadLabel,
     viaGroupTpl,
+    viaDepartmentTpl,
     revoke,
     promoteToEdit,
     noOtherParticipants,

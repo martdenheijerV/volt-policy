@@ -14,9 +14,9 @@ export default async function ComparePage({
 }) {
   const { id } = await params;
   const { from, to } = await searchParams;
-  const supabase = await createClient();
+  const db = await createClient();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title,current_version")
     .eq("id", id)
@@ -26,7 +26,7 @@ export default async function ComparePage({
   const fromV = parseInt(from ?? "1", 10);
   const toV = parseInt(to ?? String(doc.current_version), 10);
 
-  const { data: versions } = await supabase
+  const { data: versions } = await db
     .from("document_versions")
     .select("version_number,title,content,change_summary,created_at")
     .eq("document_id", id)

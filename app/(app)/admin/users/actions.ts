@@ -13,13 +13,13 @@ import type { UserRole } from "@/lib/types";
  * is_admin() guard in the server action body.
  */
 export async function setUserRole(userId: string, role: UserRole): Promise<void> {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -28,7 +28,7 @@ export async function setUserRole(userId: string, role: UserRole): Promise<void>
     throw new Error("Only admins can change user roles.");
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from("profiles")
     .update({ role })
     .eq("id", userId);
@@ -56,13 +56,13 @@ export async function createExternalUser(input: {
   | { ok: true; username: string; tempPassword: string; loginUrl: string }
   | { ok: false; error: string }
 > {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)

@@ -7,13 +7,13 @@ import type { Profile } from "@/lib/types";
 
 export default async function SettingsPage() {
   const { t } = await getT();
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("*")
     .eq("id", user.id)

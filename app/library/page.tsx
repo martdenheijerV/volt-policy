@@ -13,14 +13,14 @@ export default async function LibraryPage({
 }) {
   const { tr } = await getTr();
   const params = await searchParams;
-  const supabase = await createClient();
+  const db = await createClient();
 
   // Public layer: every doc that has been approved at least once shows
   // up — even if it's currently in 'draft' (an editor is preparing the
   // next version). Public always reads from document_versions[approved_version_number]
   // so they see the last-approved snapshot, never a working draft.
   // Archived docs stay hidden.
-  let query = supabase
+  let query = db
     .from("documents")
     .select("*")
     // approved_version_number is >= 1 once a doc has been approved at

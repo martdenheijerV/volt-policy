@@ -2,10 +2,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/db/client";
 
 export default async function HomePage() {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
   return (
     <main className="min-h-screen">

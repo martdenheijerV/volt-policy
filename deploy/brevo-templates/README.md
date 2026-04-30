@@ -12,8 +12,9 @@ account (`sofieverbindt.nl`). For production, Volt should:
 3. Create a sender like `policy@volteuropa.org`.
 4. Re-connect the Brevo MCP to that account (or just paste the templates
    below into the Brevo dashboard manually).
-5. Generate an SMTP key under *Senders & IP → SMTP* and put it in Supabase
-   Auth's SMTP settings.
+5. Generate an SMTP key under *Senders & IP → SMTP* and put it in the
+   `BREVO_SMTP_*` env vars on the VPS so the OIDC callback flow and
+   the transactional notifier (`lib/email.ts`) can send through it.
 
 ## Templates
 
@@ -42,13 +43,14 @@ account (`sofieverbindt.nl`). For production, Volt should:
 - **Subject**: `"{{params.docTitle}}" is now {{params.status}}`
 - **HTML**: `status-change.html`
 
-## Supabase Auth integration
+## How the templates are wired up
 
-Supabase Auth doesn't render Brevo templates directly — it sends raw
-emails through SMTP. So:
+Authentication runs over OIDC (Authentik), so signup-confirmation and
+password-reset emails are sent by the identity provider, not by this
+app. We point those at Brevo SMTP via Authentik's email settings.
 
-- **Confirm signup** + **password reset**: configure in Supabase Studio
-  *Authentication → Email Templates*, paste the HTML body inline.
+- **Confirm signup** + **password reset**: configured inside Authentik
+  (Identity → Email Templates), pointed at Brevo SMTP.
 - **Comment notification** + **status change**: triggered from server
-  actions, calling `transac_templates_send_transac_email` via the Brevo
-  MCP (or REST API directly).
+  actions in this app via `lib/email.ts`, which calls the Brevo
+  transactional API directly.

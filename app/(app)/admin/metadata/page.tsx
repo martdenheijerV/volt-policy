@@ -5,19 +5,19 @@ import { T } from "@/components/T";
 import { getTr } from "@/lib/i18n/server";
 
 export default async function MetadataAdminPage() {
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
-  const { data: me } = await supabase
+  } = await db.auth.getUser();
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user?.id ?? "")
     .maybeSingle();
   if (me?.role !== "admin") redirect("/dashboard");
 
-  const { data: fields } = await supabase
+  const { data: fields } = await db
     .from("metadata_fields")
     .select("*")
     .order("display_order");

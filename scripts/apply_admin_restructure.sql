@@ -86,10 +86,9 @@ as $$
   );
 $$;
 
--- Grant to PUBLIC (every connected role) so the function works on
--- both Supabase Cloud (anon / authenticated) and self-hosted setups
--- that don't have those roles. SECURITY DEFINER means the body runs
--- with the function owner's rights regardless.
+-- Grant to PUBLIC (every connected role) so the function works
+-- regardless of which connection role is in use. SECURITY DEFINER
+-- means the body runs with the function owner's rights regardless.
 grant execute on function public.is_department_lead_for_doc(uuid) to public;
 
 create table if not exists public.user_group_leads (

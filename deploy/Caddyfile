@@ -6,12 +6,6 @@ policy.volteuropa.org {
     reverse_proxy app:3000
 }
 
-supabase.policy.volteuropa.org {
-    encode zstd gzip
-    # Self-hosted Supabase Kong gateway (default port 8000)
-    reverse_proxy host.docker.internal:8000
-}
-
 realtime.policy.volteuropa.org {
     encode zstd gzip
     reverse_proxy hocuspocus:1234

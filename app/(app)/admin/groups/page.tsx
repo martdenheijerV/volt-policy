@@ -6,12 +6,12 @@ import { T } from "@/components/T";
 import { getTr } from "@/lib/i18n/server";
 
 export default async function GroupsPage() {
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
-  const { data: me } = await supabase
+  } = await db.auth.getUser();
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user?.id ?? "")
@@ -25,7 +25,7 @@ export default async function GroupsPage() {
 
   let groups: { id: string; name: string; description: string | null; created_at: string }[] | null = null;
   if (isAdmin) {
-    const { data } = await supabase
+    const { data } = await db
       .from("user_groups")
       .select("id,name,description,created_at")
       .order("name");
@@ -34,13 +34,13 @@ export default async function GroupsPage() {
     // Policy_lead: only show groups this user is in. We get their
     // group_ids first, then look up the groups themselves. The shim
     // doesn't support .in() reliably with empty arrays, so we guard.
-    const { data: memberships } = await supabase
+    const { data: memberships } = await db
       .from("user_group_members")
       .select("group_id")
       .eq("user_id", user?.id ?? "");
     const groupIds = (memberships ?? []).map((m) => m.group_id);
     if (groupIds.length > 0) {
-      const { data } = await supabase
+      const { data } = await db
         .from("user_groups")
         .select("id,name,description,created_at")
         .in("id", groupIds)

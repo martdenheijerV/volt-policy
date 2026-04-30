@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/db/client";
 
 export async function setDiscussion(formData: FormData) {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
 
   const document_id = formData.get("document_id") as string;
@@ -15,7 +15,7 @@ export async function setDiscussion(formData: FormData) {
   const url = (formData.get("url") as string)?.trim();
   if (!url) throw new Error("URL is required");
 
-  const { error } = await supabase
+  const { error } = await db
     .from("document_discussions")
     .upsert(
       { document_id, platform, url, created_by: user.id },

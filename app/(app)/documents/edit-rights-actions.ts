@@ -43,8 +43,8 @@ export async function requestEditRights(
   // the request readable in the audit log even if the profile is later
   // GDPR-deleted (in which case requester_id goes null but
   // requester_name_cached survives).
-  const supabase = await createClient();
-  const { data: profile } = await supabase
+  const db = await createClient();
+  const { data: profile } = await db
     .from("profiles")
     .select("full_name")
     .eq("id", userId)
@@ -198,13 +198,13 @@ export async function grantEditRights(
   const userId = await getCurrentUserId();
   if (!userId) return { ok: false, error: "Not authenticated" };
 
-  const supabase = await createClient();
-  const { data: doc } = await supabase
+  const db = await createClient();
+  const { data: doc } = await db
     .from("documents")
     .select("owner_id")
     .eq("id", documentId)
     .maybeSingle<{ owner_id: string | null }>();
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", userId)
@@ -260,13 +260,13 @@ export async function revokeEditRights(
   const userId = await getCurrentUserId();
   if (!userId) return { ok: false, error: "Not authenticated" };
 
-  const supabase = await createClient();
-  const { data: doc } = await supabase
+  const db = await createClient();
+  const { data: doc } = await db
     .from("documents")
     .select("owner_id")
     .eq("id", documentId)
     .maybeSingle<{ owner_id: string | null }>();
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", userId)

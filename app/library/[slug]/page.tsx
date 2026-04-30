@@ -19,13 +19,13 @@ export default async function PublicDocumentPage({
 }) {
   const { slug } = await params;
   const sp = (await searchParams) ?? {};
-  const supabase = await createClient();
+  const db = await createClient();
 
   // Public sees any doc that has ever been approved (and isn't archived),
   // regardless of current status. This way an editor re-opening an
   // approved doc to draft a new version doesn't temporarily yank the
   // existing public version off /library.
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("*")
     .eq("slug", slug)
@@ -42,7 +42,7 @@ export default async function PublicDocumentPage({
   let publicTitle = doc.title;
   let publicVersion = doc.current_version;
   if (doc.approved_version_number && doc.approved_version_number !== doc.current_version) {
-    const { data: snap } = await supabase
+    const { data: snap } = await db
       .from("document_versions")
       .select("title,content,version_number")
       .eq("document_id", doc.id)

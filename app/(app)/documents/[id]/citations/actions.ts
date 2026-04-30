@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/db/client";
 
 export async function addCitation(formData: FormData) {
-  const supabase = await createClient();
+  const db = await createClient();
   const document_id = formData.get("document_id") as string;
   const cite_key = (formData.get("cite_key") as string)?.trim();
   const author = ((formData.get("author") as string) || "").trim();
@@ -13,7 +13,7 @@ export async function addCitation(formData: FormData) {
   const source = ((formData.get("source") as string) || "").trim();
   const url = ((formData.get("url") as string) || "").trim();
   if (!cite_key || !title) throw new Error("cite_key and title are required");
-  const { error } = await supabase
+  const { error } = await db
     .from("citations")
     .insert({
       document_id,
@@ -29,8 +29,8 @@ export async function addCitation(formData: FormData) {
 }
 
 export async function deleteCitation(id: string, documentId: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("citations").delete().eq("id", id);
+  const db = await createClient();
+  const { error } = await db.from("citations").delete().eq("id", id);
   if (error) throw error;
   revalidatePath(`/documents/${documentId}/citations`);
 }

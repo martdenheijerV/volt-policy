@@ -4,15 +4,16 @@ import { getCurrentUserId } from "@/lib/auth/server";
 /**
  * Server-side wrapper around the SQL function `public.can_approve_doc(uuid)`.
  *
- * Why a wrapper: the project's `lib/db/client.ts` is a Supabase-shaped shim
- * over raw Postgres and doesn't implement `supabase.rpc(...)`. Calling the
+ * Why a wrapper: the project's `lib/db/client.ts` is a thin PostgREST-style
+ * shim over raw Postgres and doesn't implement `db.rpc(...)`. Calling the
  * function via raw SQL through `withUser` keeps RLS context (`app.user_id`)
  * intact so the SECURITY DEFINER function sees the right caller.
  *
  * Returns false when the caller isn't authenticated. Admins always get
- * true; policy_leads get true only for docs that match a group permission
- * rule with `can_approve=true`. Editors / members / translators always
- * get false.
+ * true; scope leads (group lead via `policy_lead` or department lead via
+ * `policy_lead_department`) get true for docs in their scope. Plain
+ * editors always get false — see migration 015_scoped_permissions for
+ * the full SQL definition.
  */
 export async function canApproveDoc(documentId: string): Promise<boolean> {
   const userId = await getCurrentUserId();

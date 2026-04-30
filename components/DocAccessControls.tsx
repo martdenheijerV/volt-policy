@@ -37,7 +37,9 @@ export interface DocAccessControlsLabels {
   canEdit: string;
   canComment: string;
   canApprove: string;
-  viaGroupTpl: string; // "via {name}"
+  leadLabel: string; // "Lead"
+  viaGroupTpl: string; // "via group {name}"
+  viaDepartmentTpl: string; // "via department {name}"
   revoke: string;
   promoteToEdit: string;
   noOtherParticipants: string;
@@ -68,15 +70,27 @@ export interface DocParticipantsProps {
     can_edit: boolean;
     can_comment: boolean;
   }>;
-  groupMembers: Array<{
+  // Members of the doc's scope (group OR department) with their
+  // can_read / can_edit flags. One row per (user, scope) pair.
+  scopeMembers: Array<{
     user_id: string;
     name: string | null;
     role: string | null;
-    via_group: string;
-    via_group_id: string;
+    via_scope_kind: "group" | "department";
+    via_scope_id: string;
+    via_scope_name: string;
+    can_read: boolean;
     can_edit: boolean;
-    can_comment: boolean;
-    can_approve: boolean;
+  }>;
+  // Leads of the doc's scope. Always have full rights — rendered with
+  // a distinct badge so the lead-status is visually unambiguous.
+  scopeLeads: Array<{
+    user_id: string;
+    name: string | null;
+    role: string | null;
+    via_scope_kind: "group" | "department";
+    via_scope_id: string;
+    via_scope_name: string;
   }>;
 }
 
@@ -149,13 +163,15 @@ export default function DocAccessControls({
     };
   }, [peopleOpen, requestOpen]);
 
-  // Total people count for the indicator. Owner counts once; permitted
-  // users counted; group members deduped by user_id (a user could be in
-  // multiple groups). Falls back to 0 for new docs.
+  // Total people count for the indicator. Owner counts once; explicit
+  // grants counted; scope members and scope leads deduped by user_id
+  // (a user could be both a lead and a member, or appear via multiple
+  // scopes — though the XOR check on documents prevents the latter).
   const allUserIds = new Set<string>();
   if (participants.owner) allUserIds.add(participants.owner.id);
   for (const p of participants.permitted) allUserIds.add(p.user_id);
-  for (const g of participants.groupMembers) allUserIds.add(g.user_id);
+  for (const m of participants.scopeMembers) allUserIds.add(m.user_id);
+  for (const l of participants.scopeLeads) allUserIds.add(l.user_id);
   const peopleCount = allUserIds.size;
 
   function onRequestSubmit() {
@@ -307,48 +323,80 @@ export default function DocAccessControls({
                   </div>
                 </li>
               ))}
-              {participants.groupMembers.map((g) => (
-                <li
-                  key={`g:${g.user_id}:${g.via_group_id}`}
-                  className="flex items-center justify-between gap-2 px-4 py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">
-                      {g.name ?? g.user_id}
+              {/* Scope leads — always full rights inside the scope. */}
+              {participants.scopeLeads.map((l) => {
+                const tpl =
+                  l.via_scope_kind === "group"
+                    ? labels.viaGroupTpl
+                    : labels.viaDepartmentTpl;
+                return (
+                  <li
+                    key={`l:${l.user_id}:${l.via_scope_id}`}
+                    className="flex items-center justify-between gap-2 px-4 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">
+                        {l.name ?? l.user_id}
+                      </div>
+                      <div className="truncate text-xs text-slate-500">
+                        {tpl.replace("{name}", l.via_scope_name)}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-slate-500">
-                      {labels.viaGroupTpl.replace("{name}", g.via_group)}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {g.can_approve && (
+                    <div className="flex shrink-0 items-center gap-1">
                       <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-700">
-                        {labels.canApprove}
+                        {labels.leadLabel}
                       </span>
-                    )}
-                    {g.can_edit && (
                       <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-700">
                         {labels.canEdit}
                       </span>
-                    )}
-                    {!g.can_edit && g.can_comment && (
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-600">
-                        {labels.canComment}
-                      </span>
-                    )}
-                    {isApprover && !g.can_edit && (
-                      <button
-                        type="button"
-                        onClick={() => onPromote(g.user_id)}
-                        disabled={pending}
-                        className="ml-1 rounded border border-volt-200 px-1.5 py-0.5 text-[10px] text-volt-700 hover:bg-volt-50 disabled:opacity-40"
-                      >
-                        + {labels.canEdit}
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
+                    </div>
+                  </li>
+                );
+              })}
+              {/* Scope members — read or edit per the per-member row. */}
+              {participants.scopeMembers.map((m) => {
+                const tpl =
+                  m.via_scope_kind === "group"
+                    ? labels.viaGroupTpl
+                    : labels.viaDepartmentTpl;
+                return (
+                  <li
+                    key={`m:${m.user_id}:${m.via_scope_id}`}
+                    className="flex items-center justify-between gap-2 px-4 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">
+                        {m.name ?? m.user_id}
+                      </div>
+                      <div className="truncate text-xs text-slate-500">
+                        {tpl.replace("{name}", m.via_scope_name)}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {m.can_edit && (
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-700">
+                          {labels.canEdit}
+                        </span>
+                      )}
+                      {!m.can_edit && m.can_read && (
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-600">
+                          {labels.canComment}
+                        </span>
+                      )}
+                      {isApprover && !m.can_edit && (
+                        <button
+                          type="button"
+                          onClick={() => onPromote(m.user_id)}
+                          disabled={pending}
+                          className="ml-1 rounded border border-volt-200 px-1.5 py-0.5 text-[10px] text-volt-700 hover:bg-volt-50 disabled:opacity-40"
+                        >
+                          + {labels.canEdit}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
               {peopleCount === 0 && (
                 <li className="px-4 py-3 text-xs text-slate-500">
                   {labels.noOtherParticipants}

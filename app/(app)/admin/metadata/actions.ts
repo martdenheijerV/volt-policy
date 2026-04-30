@@ -5,22 +5,22 @@ import { createClient } from "@/lib/db/client";
 import type { DocType } from "@/lib/types";
 
 async function requireAdmin() {
-  const supabase = await createClient();
+  const db = await createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  const { data: me } = await supabase
+  const { data: me } = await db
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .maybeSingle();
   if (me?.role !== "admin") throw new Error("Admin only");
-  return supabase;
+  return db;
 }
 
 export async function createMetadataField(formData: FormData) {
-  const supabase = await requireAdmin();
+  const db = await requireAdmin();
   const key = (formData.get("key") as string)?.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
   const label = (formData.get("label") as string)?.trim();
   const field_type = formData.get("field_type") as string;
@@ -34,7 +34,7 @@ export async function createMetadataField(formData: FormData) {
       ? { choices: optionsRaw.split(",").map((s) => s.trim()).filter(Boolean) }
       : null;
 
-  const { error } = await supabase.from("metadata_fields").insert({
+  const { error } = await db.from("metadata_fields").insert({
     key,
     label,
     field_type,
@@ -47,7 +47,7 @@ export async function createMetadataField(formData: FormData) {
 }
 
 export async function deleteMetadataField(id: string) {
-  const supabase = await requireAdmin();
-  await supabase.from("metadata_fields").delete().eq("id", id);
+  const db = await requireAdmin();
+  await db.from("metadata_fields").delete().eq("id", id);
   revalidatePath("/admin/metadata");
 }

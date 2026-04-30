@@ -11,17 +11,17 @@ export default async function DiscussionConfigPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title")
     .eq("id", id)
     .maybeSingle();
   if (!doc) notFound();
 
-  const { data: link } = await supabase
+  const { data: link } = await db
     .from("document_discussions")
     .select("platform,url")
     .eq("document_id", id)

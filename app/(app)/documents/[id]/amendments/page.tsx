@@ -12,32 +12,32 @@ export default async function AmendmentsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const db = await createClient();
   const { tr } = await getTr();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
 
-  const { data: doc } = await supabase
+  const { data: doc } = await db
     .from("documents")
     .select("id,title,owner_id,status")
     .eq("id", id)
     .maybeSingle();
   if (!doc) notFound();
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("role")
     .eq("id", user?.id ?? "")
     .maybeSingle();
 
-  const { data: amendments } = await supabase
+  const { data: amendments } = await db
     .from("amendments")
     .select("*")
     .eq("document_id", id)
     .order("created_at", { ascending: false });
 
-  const { data: mySupport } = await supabase
+  const { data: mySupport } = await db
     .from("amendment_supporters")
     .select("amendment_id")
     .eq("user_id", user?.id ?? "");
@@ -46,7 +46,7 @@ export default async function AmendmentsPage({
 
   const supportCounts: Record<string, number> = {};
   if (amendments && amendments.length > 0) {
-    const { data: counts } = await supabase
+    const { data: counts } = await db
       .from("amendment_supporters")
       .select("amendment_id")
       .in("amendment_id", amendments.map((a) => a.id));

@@ -38,6 +38,8 @@ export interface EditRightsPanelLabels {
   canComment: string;
   canApprove: string;
   viaGroupTpl: string; // "via group {name}"
+  viaDepartmentTpl: string; // "via department {name}"
+  leadLabel: string; // "Lead"
   noOtherParticipants: string;
   revoke: string;
   // Status messages
@@ -67,15 +69,23 @@ export interface DocParticipantsProps {
     can_edit: boolean;
     can_comment: boolean;
   }>;
-  groupMembers: Array<{
+  scopeMembers: Array<{
     user_id: string;
     name: string | null;
     role: string | null;
-    via_group: string;
-    via_group_id: string;
+    via_scope_kind: "group" | "department";
+    via_scope_id: string;
+    via_scope_name: string;
+    can_read: boolean;
     can_edit: boolean;
-    can_comment: boolean;
-    can_approve: boolean;
+  }>;
+  scopeLeads: Array<{
+    user_id: string;
+    name: string | null;
+    role: string | null;
+    via_scope_kind: "group" | "department";
+    via_scope_id: string;
+    via_scope_name: string;
   }>;
 }
 
@@ -398,51 +408,83 @@ export default function EditRightsPanel({
                 </div>
               </li>
             ))}
-            {participants.groupMembers.map((p) => (
-              <li
-                key={`g:${p.user_id}:${p.via_group_id}`}
-                className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <span className="font-medium">{p.name ?? p.user_id}</span>
-                  <span className="ml-2 text-xs text-slate-500">
-                    {labels.viaGroupTpl.replace("{name}", p.via_group)}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2 text-xs">
-                  {p.can_approve && (
-                    <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
-                      {labels.canApprove}
+            {/* Scope leads — automatically have full rights. */}
+            {participants.scopeLeads.map((l) => {
+              const tpl =
+                l.via_scope_kind === "group"
+                  ? labels.viaGroupTpl
+                  : labels.viaDepartmentTpl;
+              return (
+                <li
+                  key={`l:${l.user_id}:${l.via_scope_id}`}
+                  className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium">{l.name ?? l.user_id}</span>
+                    <span className="ml-2 text-xs text-slate-500">
+                      {tpl.replace("{name}", l.via_scope_name)}
                     </span>
-                  )}
-                  {p.can_edit && (
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-xs">
+                    <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">
+                      {labels.leadLabel}
+                    </span>
                     <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">
                       {labels.canEdit}
                     </span>
-                  )}
-                  {p.can_comment && !p.can_edit && (
-                    <span className="rounded bg-slate-50 px-2 py-0.5 text-slate-700">
-                      {labels.canComment}
+                  </div>
+                </li>
+              );
+            })}
+            {/* Scope members — read by default, edit when promoted. */}
+            {participants.scopeMembers.map((m) => {
+              const tpl =
+                m.via_scope_kind === "group"
+                  ? labels.viaGroupTpl
+                  : labels.viaDepartmentTpl;
+              return (
+                <li
+                  key={`m:${m.user_id}:${m.via_scope_id}`}
+                  className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium">{m.name ?? m.user_id}</span>
+                    <span className="ml-2 text-xs text-slate-500">
+                      {tpl.replace("{name}", m.via_scope_name)}
                     </span>
-                  )}
-                  {/* Approvers can also "promote" a group member to a
-                      direct grant — useful if the group rule changes
-                      later but you want this person to keep edit. */}
-                  {isApprover && !p.can_edit && (
-                    <button
-                      type="button"
-                      onClick={() => onDirectGrant(p.user_id)}
-                      disabled={pending}
-                      className="rounded border border-volt-300 px-2 py-0.5 text-volt-700 hover:bg-volt-50 disabled:opacity-50"
-                    >
-                      + {labels.canEdit}
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-xs">
+                    {m.can_edit && (
+                      <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">
+                        {labels.canEdit}
+                      </span>
+                    )}
+                    {m.can_read && !m.can_edit && (
+                      <span className="rounded bg-slate-50 px-2 py-0.5 text-slate-700">
+                        {labels.canComment}
+                      </span>
+                    )}
+                    {/* Approvers can promote a scope member to a
+                        per-doc edit grant — keeps that person's
+                        edit-rights on this doc even if the lead
+                        later flips can_edit off in the scope. */}
+                    {isApprover && !m.can_edit && (
+                      <button
+                        type="button"
+                        onClick={() => onDirectGrant(m.user_id)}
+                        disabled={pending}
+                        className="rounded border border-volt-300 px-2 py-0.5 text-volt-700 hover:bg-volt-50 disabled:opacity-50"
+                      >
+                        + {labels.canEdit}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
             {participants.permitted.length === 0 &&
-              participants.groupMembers.length === 0 &&
+              participants.scopeMembers.length === 0 &&
+              participants.scopeLeads.length === 0 &&
               !participants.owner && (
                 <li className="px-3 py-3 text-sm text-slate-500">
                   {labels.noOtherParticipants}
