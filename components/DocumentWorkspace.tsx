@@ -42,6 +42,10 @@ export interface DocumentWorkspaceLabels {
   edit: string;
   preview: string;
   title: string;
+  /** Visually-hidden label on the inline title input above the editor. */
+  titleLabel?: string;
+  /** Placeholder shown in the title input when the doc has no title yet. */
+  titlePlaceholder?: string;
   /** Section heading for the auto-saved indicator. */
   autosaveLabel: string;
   /** "Saving…" while the autosave POST is in flight. */
@@ -241,30 +245,12 @@ export default function DocumentWorkspace({
     visible line) becomes the doc's title for the dashboard list,
     library URL, etc. Empty docs keep an "Untitled" fallback.
   */
-  function deriveTitleFromHtml(html: string): string {
-    if (!html) return "Untitled";
-    const heading = html.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
-    if (heading) {
-      const text = heading[1]
-        .replace(/<[^>]+>/g, "")
-        .replace(/&nbsp;/g, " ")
-        .trim();
-      if (text) return text.slice(0, 200);
-    }
-    const stripped = html
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (stripped) return stripped.slice(0, 80);
-    return "Untitled";
-  }
-  // Keep the title state in sync with content. The autosave below
-  // picks up `title` automatically the next time it fires.
-  useEffect(() => {
-    const next = deriveTitleFromHtml(contentHtml);
-    setTitle((prev) => (prev === next ? prev : next));
-  }, [contentHtml]);
+  // Title used to be auto-derived from the first heading in the
+  // content (deriveTitleFromHtml + a useEffect that ran on every
+  // content change). Mart switched to an explicit, user-controlled
+  // title input above the editor — see the `<input>` rendered inside
+  // `paper-body-prose` further below. The state still holds it; the
+  // autosave still ships it; only the auto-derive is gone.
 
   const dirty = title !== savedTitle || contentHtml !== savedHtml;
 
@@ -546,6 +532,26 @@ export default function DocumentWorkspace({
           <div ref={stickySentinelRef} aria-hidden style={{ height: 1 }} />
           <div className="editor-paper">
             <div className="paper-body-prose">
+              {/*
+                Title field — sits at the top of the A4-style paper,
+                above the prose. Borderless on idle so it reads like a
+                Word-doc heading; gets a faint focus ring on edit.
+                Disabled when the doc is locked (review/approved/
+                archived). Autosave picks up the new value on next
+                debounced fire (see `dirty` calculation above).
+              */}
+              <label htmlFor="doc-title-input" className="sr-only">
+                {labels.titleLabel ?? "Title"}
+              </label>
+              <input
+                id="doc-title-input"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={!canEdit}
+                placeholder={labels.titlePlaceholder ?? "Untitled"}
+                className="mb-4 block w-full border-0 bg-transparent px-0 text-3xl font-bold text-slate-900 outline-none placeholder:text-slate-300 focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
+              />
               <RichTextEditor
                 toolbarTrailingSlot={
                   <div className="flex items-center gap-2">
@@ -616,12 +622,11 @@ export default function DocumentWorkspace({
                   </div>
                 }
                 /*
-                  Title slot intentionally omitted. Mart wanted a
-                  pure word-doc — no separate title input above the
-                  prose, just type and style your own heading. The
-                  document's persisted `title` field is auto-derived
-                  from the first heading (or first line) on autosave;
-                  see `deriveTitleFromHtml` below.
+                  Title slot inside the editor itself stays empty —
+                  the title now lives in a dedicated <input> above
+                  the prose (see paper-body-prose). RichTextEditor's
+                  toolbar still mounts at the top of the editor, the
+                  title sits above the toolbar.
                 */
             ref={editorRef}
             initialContent={initialContent}
