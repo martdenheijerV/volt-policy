@@ -88,8 +88,29 @@ export async function createDocument(formData: FormData) {
     department_id = scopeDepartmentId;
 
   if (!title) throw new Error("Title is required");
+  if (!purpose) throw new Error("Purpose is required");
   if (!group_id && !department_id) {
     throw new Error("Pick a working group or department for this document");
+  }
+
+  // Owner picker: defaults to the current user. Admins and policy_leads
+  // may override by posting `scope_owner_id`; everyone else has the
+  // field locked client-side and we silently ignore any spoofed value.
+  const requestedOwnerId = (
+    (formData.get("scope_owner_id") as string) || ""
+  ).trim();
+  let owner_id = user.id;
+  if (requestedOwnerId && requestedOwnerId !== user.id) {
+    const { data: me } = await db
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle<{ role: string }>();
+    const canAssign =
+      me?.role === "admin" ||
+      me?.role === "policy_lead" ||
+      me?.role === "policy_lead_department";
+    if (canAssign) owner_id = requestedOwnerId;
   }
 
   // Validate required custom metadata fields
@@ -129,7 +150,7 @@ export async function createDocument(formData: FormData) {
       language,
       purpose,
       tags,
-      owner_id: user.id,
+      owner_id,
       current_content: content,
       // current_version stays at 0 until the first approval. Under the
       // autosave-first model, V1 is the first admin/lead sign-off — not

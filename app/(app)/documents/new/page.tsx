@@ -78,6 +78,24 @@ export default async function NewDocumentPage() {
     ? await getEligibleScopes(userId)
     : { groups: [], departments: [] };
 
+  // Owner picker: admins and policy_leads can create a doc on behalf
+  // of someone else; everyone else gets a single self-locked choice.
+  const { data: me } = await db
+    .from("profiles")
+    .select("id,full_name,role")
+    .eq("id", userId ?? "")
+    .maybeSingle<{ id: string; full_name: string | null; role: string | null }>();
+  const canPickOtherOwner =
+    me?.role === "admin" ||
+    me?.role === "policy_lead" ||
+    me?.role === "policy_lead_department";
+  const { data: ownerCandidates } = canPickOtherOwner
+    ? await db
+        .from("profiles")
+        .select("id,full_name,role")
+        .order("full_name")
+    : { data: null };
+
   // Group fields: shown for all (applies_to null) vs per-type
   const universal = (fields ?? []).filter((f) => !f.applies_to);
 
@@ -102,6 +120,9 @@ export default async function NewDocumentPage() {
     scopeNoneEligible,
     scopeWorkingGroup,
     scopeDepartment,
+    ownerLabel,
+    ownerHint,
+    ownerYou,
   ] = await Promise.all([
     tr("Why does this document exist?"),
     tr("climate, eu, trade (comma-separated)"),
@@ -115,6 +136,11 @@ export default async function NewDocumentPage() {
     ),
     tr("Working group"),
     tr("Department"),
+    tr("Owner"),
+    tr(
+      "The person responsible for this document. Defaults to you. Admins and leads can assign someone else."
+    ),
+    tr("you"),
   ]);
 
   return (
@@ -278,15 +304,52 @@ export default async function NewDocumentPage() {
 
         <div>
           <label htmlFor="purpose" className="block text-sm font-medium">
-            <T>Purpose</T>
+            <T>Purpose</T> <span className="text-red-600">*</span>
           </label>
           <textarea
             id="purpose"
             name="purpose"
+            required
             rows={2}
             className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
             placeholder={purposePh}
           />
+        </div>
+
+        {/*
+          Owner picker. Defaults to the current user. Admins and
+          policy_leads see a dropdown of every profile so they can
+          assign the doc to someone else; everyone else gets a static
+          read-only "Owner: you" label, and the server action falls
+          back to user.id when no scope_owner_id is posted.
+        */}
+        <div>
+          <label htmlFor="scope_owner_id" className="block text-sm font-medium">
+            {ownerLabel}
+          </label>
+          {canPickOtherOwner && ownerCandidates ? (
+            <>
+              <select
+                id="scope_owner_id"
+                name="scope_owner_id"
+                defaultValue={me?.id ?? ""}
+                className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+              >
+                {ownerCandidates.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {(p.full_name ?? p.id.slice(0, 8)) +
+                      (p.id === me?.id ? ` (${ownerYou})` : "")}
+                    {p.role ? ` — ${p.role}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">{ownerHint}</p>
+            </>
+          ) : (
+            <p className="mt-1 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {me?.full_name ?? ownerYou}
+            </p>
+          )}
         </div>
 
         <div>
