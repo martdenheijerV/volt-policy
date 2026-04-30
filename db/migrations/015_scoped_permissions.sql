@@ -320,7 +320,12 @@ $$;
 -- gated on this (see doc_editable below) — the doc is locked to
 -- everyone except the people who can move it forward, the same
 -- principle as migration 007 (approved means locked & public).
-create or replace function public.can_approve_doc(p_doc uuid)
+--
+-- Parameter name carry-over: migration 006 created this function with
+-- the parameter named `d_id`. Postgres refuses to rename input
+-- parameters via CREATE OR REPLACE, so we keep `d_id` here even
+-- though the rest of this migration uses `p_doc`. Don't "fix" it.
+create or replace function public.can_approve_doc(d_id uuid)
 returns boolean
 language sql
 stable
@@ -329,7 +334,7 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.documents d
-    where d.id = p_doc
+    where d.id = d_id
       and (
         public.is_admin()
         or (d.group_id is not null and exists (
@@ -467,8 +472,12 @@ as $$
   );
 $$;
 
-grant execute on function public.can_publish_to_group(uuid) to anon, authenticated;
-grant execute on function public.can_publish_to_department(uuid) to anon, authenticated;
+-- Grant to PUBLIC (every connected role) — `anon` / `authenticated`
+-- are Supabase-Cloud-isms that don't exist on plain self-hosted
+-- Postgres. SECURITY DEFINER on the function keeps the body running
+-- with the owner's rights regardless.
+grant execute on function public.can_publish_to_group(uuid) to public;
+grant execute on function public.can_publish_to_department(uuid) to public;
 
 -- ---------------------------------------------------------------
 -- 7. Replace documents INSERT policy
