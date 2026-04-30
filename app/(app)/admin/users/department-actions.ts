@@ -75,11 +75,16 @@ export async function deleteDepartment(id: string): Promise<ActionResult> {
 
 /**
  * Assign a user as policy lead for a department, or unassign them.
- * The user's profile role must already be `policy_lead_department`
- * — the join row alone doesn't grant any rights, the SECURITY
- * DEFINER helper checks both sides. We surface that as a soft hint
- * in the UI rather than a hard server-side block, so admins can
- * pre-populate assignments before flipping a user's role.
+ *
+ * Side effect on assign: if the target user isn't already an admin
+ * or a policy_lead_department, we promote their role to
+ * policy_lead_department so the assignment actually grants rights.
+ * Admins outrank the scoped role and keep their admin role.
+ *
+ * Side effect on unassign: we leave the role alone — the user
+ * might still lead another department, and even if they don't,
+ * silently demoting them isn't this action's job. Admins manage
+ * roles explicitly on the same Personen page.
  */
 export async function setDepartmentLead(
   departmentId: string,
@@ -88,21 +93,48 @@ export async function setDepartmentLead(
 ): Promise<ActionResult> {
   const auth = await requireAdmin();
   if (!auth.ok) return auth;
+
   if (assigned) {
-    const { error } = await auth.supabase
+    // 1. Insert the join row (idempotent — 23505 = already there).
+    const { error: insertErr } = await auth.supabase
       .from("department_leads")
       .insert({ department_id: departmentId, user_id: userId });
-    if (error && error.code !== "23505") {
-      return { ok: false, error: error.message };
+    if (insertErr && insertErr.code !== "23505") {
+      return { ok: false, error: insertErr.message };
     }
-  } else {
-    const { error } = await auth.supabase
-      .from("department_leads")
-      .delete()
-      .eq("department_id", departmentId)
-      .eq("user_id", userId);
-    if (error) return { ok: false, error: error.message };
+
+    // 2. Promote the user's role to policy_lead_department unless
+    //    they're already that or admin (admin outranks the scoped
+    //    role; demoting an admin would be wrong).
+    const { data: target, error: roleReadErr } = await auth.supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (roleReadErr) return { ok: false, error: roleReadErr.message };
+
+    const currentRole = (target as { role?: string } | null)?.role;
+    if (
+      currentRole &&
+      currentRole !== "admin" &&
+      currentRole !== "policy_lead_department"
+    ) {
+      const { error: roleWriteErr } = await auth.supabase
+        .from("profiles")
+        .update({ role: "policy_lead_department" })
+        .eq("id", userId);
+      if (roleWriteErr) return { ok: false, error: roleWriteErr.message };
+    }
+    return { ok: true };
   }
+
+  // Unassign — just delete the join row, don't touch role.
+  const { error } = await auth.supabase
+    .from("department_leads")
+    .delete()
+    .eq("department_id", departmentId)
+    .eq("user_id", userId);
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

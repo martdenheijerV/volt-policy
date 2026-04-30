@@ -21,7 +21,6 @@ export interface DepartmentsCardLabels {
   pickLead: string;
   assign: string;
   remove: string;
-  warningWrongRole: string;
   delete: string;
   confirmDeleteTpl: string;
   failed: string;
@@ -272,31 +271,22 @@ function DepartmentRow({
               {labels.noLeads}
             </span>
           )}
-          {leads.map((p) => {
-            const wrongRole = p.role !== "policy_lead_department";
-            return (
-              <span
-                key={p.id}
-                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
-                  wrongRole
-                    ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
-                    : "bg-volt-50 text-volt-800 ring-1 ring-volt-200"
-                }`}
-                title={wrongRole ? labels.warningWrongRole : undefined}
+          {leads.map((p) => (
+            <span
+              key={p.id}
+              className="inline-flex items-center gap-1 rounded-full bg-volt-50 px-3 py-1 text-xs text-volt-800 ring-1 ring-volt-200"
+            >
+              {p.full_name ?? p.id.slice(0, 8)}
+              <button
+                type="button"
+                onClick={() => unassign(p.id)}
+                aria-label={labels.remove}
+                className="rounded hover:text-red-600"
               >
-                {p.full_name ?? p.id.slice(0, 8)}
-                {wrongRole && <span aria-hidden>⚠</span>}
-                <button
-                  type="button"
-                  onClick={() => unassign(p.id)}
-                  aria-label={labels.remove}
-                  className="rounded hover:text-red-600"
-                >
-                  ×
-                </button>
-              </span>
-            );
-          })}
+                ×
+              </button>
+            </span>
+          ))}
         </div>
 
         <div className="mt-3 flex items-center gap-2">
@@ -313,7 +303,7 @@ function DepartmentRow({
             {candidates.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.full_name ?? p.id.slice(0, 8)}
-                {p.role !== "policy_lead_department" ? " — wrong role" : ""}
+                {p.role === "admin" ? " (admin)" : ""}
               </option>
             ))}
           </select>

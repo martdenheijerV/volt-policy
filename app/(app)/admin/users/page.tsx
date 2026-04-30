@@ -270,14 +270,13 @@ async function buildDepartmentsLabels(
     pickLead,
     assign,
     remove,
-    warningWrongRole,
     deleteLabel,
     confirmDeleteTpl,
     failed,
   ] = await Promise.all([
     tr("Departments"),
     tr(
-      "Organisational units (Volt Europa, Volt EP, Volt Nederland, etc.). Each department can have one or more policy leads — admins assign them here. Leads need the role policy_lead_department to actually exercise their rights; an amber warning appears next to anyone whose role doesn't match yet."
+      "Organisational units (Volt Europa, Volt EP, Volt Nederland, etc.). Each department can have one or more policy leads — pick someone from the list and click Assign. Anyone you assign automatically becomes policy_lead_department (admins keep their admin role)."
     ),
     tr("New department name"),
     tr("Description"),
@@ -289,9 +288,6 @@ async function buildDepartmentsLabels(
     tr("Pick a person…"),
     tr("Assign"),
     tr("Remove"),
-    tr(
-      "This user is assigned as lead but doesn't have the role policy_lead_department yet. Assignment grants no rights until the role is set on the Personen tab above."
-    ),
     tr("Delete"),
     tr("Delete department {name}? Lead assignments will be removed too."),
     tr("Failed"),
@@ -309,7 +305,6 @@ async function buildDepartmentsLabels(
     pickLead,
     assign,
     remove,
-    warningWrongRole,
     delete: deleteLabel,
     confirmDeleteTpl,
     failed,
