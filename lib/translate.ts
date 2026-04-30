@@ -137,19 +137,27 @@ export async function getDocInLanguage(input: {
   // Upsert into cache
   try {
     await withUser(null, async (tx) => {
+      // Casts to public.translation_status are explicit because the
+      // postgres driver passes literals as TEXT, and the enum column
+      // refuses an implicit text→enum coercion. Without these casts
+      // every doc page that triggers a translation cache write logs:
+      //   column "status" is of type translation_status but expression
+      //   is of type text
       await tx`
         insert into document_translations
           (document_id, language, source_version, title, content, status)
         values
           (${input.documentId}, ${target}, ${input.sourceVersion},
-           ${translatedTitle}, ${translatedContent}, 'machine')
+           ${translatedTitle}, ${translatedContent},
+           'machine'::public.translation_status)
         on conflict (document_id, language) do update set
           source_version = excluded.source_version,
           title = excluded.title,
           content = excluded.content,
           status = case
-            when document_translations.status = 'verified' then 'verified'
-            else 'machine'
+            when document_translations.status = 'verified'::public.translation_status
+              then 'verified'::public.translation_status
+            else 'machine'::public.translation_status
           end,
           updated_at = now()
       `;
