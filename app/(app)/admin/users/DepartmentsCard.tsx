@@ -98,22 +98,36 @@ function CreateDepartmentForm({
 }: {
   labels: DepartmentsCardLabels;
 }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  return (
-    <form
-      action={(fd) =>
-        startTransition(async () => {
-          try {
-            await createDepartment(fd);
-          } catch (e) {
-            setError(e instanceof Error ? e.message : labels.failed);
-          }
-        })
+  function submit() {
+    if (!name.trim()) return;
+    setError(null);
+    // Hand a real FormData object to the server action — Next.js
+    // can't serialise an inline arrow-closure as a form action, but
+    // it happily accepts a server action invoked from a button
+    // click inside a transition. This keeps the optimistic UX
+    // (clear input, surface errors inline) without the
+    // <form action={inline}> footgun.
+    const fd = new FormData();
+    fd.set("name", name.trim());
+    fd.set("description", description.trim());
+    startTransition(async () => {
+      try {
+        await createDepartment(fd);
+        setName("");
+        setDescription("");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : labels.failed);
       }
-      className="mt-4 flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-slate-50 p-4"
-    >
+    });
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-end gap-3 rounded border border-slate-200 bg-slate-50 p-4">
       <div className="flex-1">
         <label
           htmlFor="dept-name"
@@ -123,8 +137,14 @@ function CreateDepartmentForm({
         </label>
         <input
           id="dept-name"
-          name="name"
-          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
           placeholder={labels.namePlaceholder}
           className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
         />
@@ -138,13 +158,21 @@ function CreateDepartmentForm({
         </label>
         <input
           id="dept-desc"
-          name="description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submit();
+            }
+          }}
           className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
         />
       </div>
       <button
-        type="submit"
-        disabled={pending}
+        type="button"
+        onClick={submit}
+        disabled={pending || !name.trim()}
         className="rounded bg-volt-600 px-4 py-2 text-sm font-medium text-white hover:bg-volt-700 disabled:opacity-50"
       >
         {labels.add}
@@ -154,7 +182,7 @@ function CreateDepartmentForm({
           {error}
         </p>
       )}
-    </form>
+    </div>
   );
 }
 
