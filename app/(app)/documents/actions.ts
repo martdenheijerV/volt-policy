@@ -66,17 +66,25 @@ export async function createDocument(formData: FormData) {
   // checkbox sends "on" when checked, nothing when unchecked.
   const citations_enabled = formData.get("citations_enabled") === "on";
 
-  // Scope picker: a single radio chooses "group" or "department",
-  // followed by a select of the chosen kind. The form composes one
-  // hidden field, scope = "group:<id>" or "department:<id>", to avoid
-  // sending two empty FormData entries (group_id="" + department_id=
-  // "<id>") that would trip the documents_scope_xor_chk constraint.
-  const scope = ((formData.get("scope") as string) || "").trim();
+  // Scope picker: form sends three loose fields:
+  //   scope_kind            ("group" | "department") from the radio
+  //   scope_group_id        chosen group id (only relevant when kind = group)
+  //   scope_department_id   chosen department id (only when kind = department)
+  // We pick the right one server-side based on scope_kind. This used
+  // to be a single composed hidden field rewritten by an inline
+  // <script> on submit, but server-rendered scripts don't fire
+  // reliably during Next.js streaming/hydration — so we let the form
+  // post the unprocessed pair and combine here.
+  const scopeKind = ((formData.get("scope_kind") as string) || "").trim();
+  const scopeGroupId = ((formData.get("scope_group_id") as string) || "").trim();
+  const scopeDepartmentId = (
+    (formData.get("scope_department_id") as string) || ""
+  ).trim();
   let group_id: string | null = null;
   let department_id: string | null = null;
-  if (scope.startsWith("group:")) group_id = scope.slice("group:".length) || null;
-  else if (scope.startsWith("department:"))
-    department_id = scope.slice("department:".length) || null;
+  if (scopeKind === "group" && scopeGroupId) group_id = scopeGroupId;
+  else if (scopeKind === "department" && scopeDepartmentId)
+    department_id = scopeDepartmentId;
 
   if (!title) throw new Error("Title is required");
   if (!group_id && !department_id) {

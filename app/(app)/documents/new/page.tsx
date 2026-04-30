@@ -273,29 +273,13 @@ export default async function NewDocumentPage() {
                 </label>
               )}
               {/*
-                Hidden synthetic field. Submit-time inline script
-                rewrites it to "group:<id>" or "department:<id>"
-                based on the selected radio. Keeps the server action
-                code untouched of dual-branch parsing logic.
+                The form posts scope_kind + scope_group_id +
+                scope_department_id as three loose fields. The server
+                action picks the correct id based on scope_kind. No
+                client-side JS needed — server-rendered <script> tags
+                don't fire reliably during Next.js streaming so we
+                used to lose the composed value before submit.
               */}
-              <input type="hidden" name="scope" id="scope-composed" />
-              <script
-                dangerouslySetInnerHTML={{
-                  __html: `
-                  (function(){
-                    var f = document.currentScript.closest('form');
-                    if (!f) return;
-                    f.addEventListener('submit', function(){
-                      var kind = f.querySelector('input[name="scope_kind"]:checked');
-                      var k = kind ? kind.value : '';
-                      var sel = f.querySelector(k === 'group' ? '#scope-group-select' : '#scope-department-select');
-                      var composed = f.querySelector('#scope-composed');
-                      if (sel && composed) composed.value = k + ':' + sel.value;
-                    });
-                  })();
-                `,
-                }}
-              />
             </div>
           )}
         </fieldset>
