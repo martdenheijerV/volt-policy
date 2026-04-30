@@ -96,19 +96,24 @@ export async function createExternalUser(input: {
   // 2. Pre-create the profiles row, keyed on email.
   //    oidc_sub stays NULL until first login matches it.
   try {
+    // The `profiles.email` column was originally added inline here
+    // via `alter table … add column if not exists` on every call,
+    // which spammed NOTICE logs forever after. The column is now
+    // owned by migration 019_profiles_email_column.sql and the unique
+    // index from that migration also gives the upsert below a real
+    // shot at idempotency.
     await withUser(user.id, async (tx) => {
       await tx`
-        insert into profiles (id, oidc_sub, full_name, role, language_pref)
-        values (gen_random_uuid(), null, ${input.name}, ${input.role}, 'en')
+        insert into profiles (id, oidc_sub, full_name, role, language_pref, email)
+        values (
+          gen_random_uuid(),
+          null,
+          ${input.name},
+          ${input.role},
+          'en',
+          ${input.email.toLowerCase()}
+        )
         on conflict do nothing
-      `;
-      // The author cache for comments and the email column for matching
-      // live in `profiles.full_name` + a dedicated email column we add now
-      // if it doesn't exist. We piggyback the email by writing it into
-      // full_name temporarily — better is a real column. Add one if missing.
-      await tx`
-        alter table profiles
-          add column if not exists email text
       `;
       await tx`
         update profiles
